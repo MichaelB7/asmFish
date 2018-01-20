@@ -25,8 +25,8 @@ SetDefault 1, USE_CMDLINEQUIT
 SetDefault 1, USE_HASHFULL
 SetDefault 1, USE_CURRMOVE
 SetDefault 0, USE_SPAMFILTER
-SetDefault 0, USE_WEAKNESS
-SetDefault 0, USE_VARIETY
+SetDefault 1, USE_WEAKNESS
+SetDefault 1, USE_VARIETY
 SetDefault 0, USE_MATEFINDER
 
 SetDefault 1, PEDANTIC
