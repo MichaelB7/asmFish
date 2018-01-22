@@ -3,21 +3,30 @@ set include=x86\include\
 set dat = `date +"%m%d%y"`
 set popcnt = "asmfish-popcnt-$dat"
 set bmi2 = "asmfish-bmi2-$dat"
+set base = "asmfish-base-$dat"
+set arm = "armfish-V8-$dat"
 set OS1 = "X"
 set OS2 = "W"
 set OS3 = "L"
 set exe = ".exe"
-fasmg "x86/fish.asm" "$popcnt-$OS1" -e 100 -i "VERSION_OS='X'" -i "VERSION_POST = 'popcnt'"
+fasmg "x86/fish.asm" "$base-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'base'"
+chmod 755 $base-$OS1
+fasmg "x86/fish.asm" "$popcnt-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'popcnt'"
 chmod 755 $popcnt-$OS1
-fasmg "x86/fish.asm" "$bmi2-$OS1" -e 100 -i "VERSION_OS='X'" -i "VERSION_POST = 'bmi2'"
+fasmg "x86/fish.asm" "$bmi2-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'bmi2'"
 chmod 755 $bmi2-$OS1
+fasmg "x86\fish.asm" "$base-$OS2$exe" -e 1000 -i "VERSION_OS='W'" -i "PEDANTIC = 1" -i "VERSION_POST = 'base'"
+chmod 755 $base-$OS2$exe
 fasmg "x86\fish.asm" "$popcnt-$OS2$exe" -e 1000 -i "VERSION_OS='W'" -i "PEDANTIC = 1" -i "VERSION_POST = 'popcnt'"
 chmod 755 $popcnt-$OS2$exe
 fasmg "x86\fish.asm" "$bmi2-$OS2$exe" -e 1000 -i "VERSION_OS='W'" -i "PEDANTIC = 1" -i "VERSION_POST = 'bmi2'"
 chmod 755 $bmi2-$OS2$exe
+fasmg "x86\fish.asm" "$base-$OS3" -e 1000 -i "VERSION_OS='L'" -i "PEDANTIC = 1" -i "VERSION_POST = 'base'"
+chmod 755 $base-$OS3
 fasmg "x86\fish.asm" "$popcnt-$OS3" -e 1000 -i "VERSION_OS='L'" -i "PEDANTIC = 1" -i "VERSION_POST = 'popcnt'"
 chmod 755 $popcnt-$OS3
 fasmg "x86\fish.asm" "$bmi2-$OS3" -e 1000 -i "VERSION_OS='L'" -i "PEDANTIC = 1" -i "VERSION_POST = 'bmi2'"
 chmod 755 $bmi2-$OS3
-
-zip asmfish-$dat.zip $popcnt-$OS1 $bmi2-$OS1 $popcnt-$OS2$exe $bmi2-$OS2$exe $popcnt-$OS3 $bmi2-$OS3
+fasmg "arm\fish.arm" "$arm-$OS3" -e 1000 -i "VERSION_OS='L'" -i "PEDANTIC = 1" -i "VERSION_POST = 'v8'"
+chmod 755 $arm-$OS3
+zip asmfish-$dat-mf.zip $base-$OS1 $popcnt-$OS1 $bmi2-$OS1 $base-$OS2$exe $popcnt-$OS2$exe $bmi2-$OS2$exe $base-$OS3 $popcnt-$OS3 $bmi2-$OS3 $arm-$OS3
