@@ -1,14 +1,16 @@
 #!/bin/csh -f
+
+### This cshell script builds asmfish on a macOS host for windows, linux android and macOS operating systems.  Simply type "Build" at the command line.  Takes about 5 minutes to run and then zips the binaries into a zip file.
 set include=x86\include\
 set dat = `date +"%m%d%y"`
 set popcnt = "asmfish-popcnt-$dat"
 set bmi2 = "asmfish-bmi2-$dat"
 set base = "asmfish-base-$dat"
 set arm = "armfish-V8-$dat"
-set OS1 = "X"
-set OS2 = "W"
-set OS3 = "L"
-set exe = ".exe"
+set OS1 = "X"   ### macOS
+set OS2 = "W"   ### Windows
+set OS3 = "L"   ###Linux
+set exe = ".exe" ###  suffix used for windows binaries
 fasmg "x86/fish.asm" "$base-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'base'"
 chmod 755 $base-$OS1
 fasmg "x86/fish.asm" "$popcnt-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'popcnt'"
