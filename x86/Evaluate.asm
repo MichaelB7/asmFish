@@ -1,23 +1,22 @@
 BishopPawns         = (  3 shl 16) + (  7)
 CloseEnemies        = (  6 shl 16) + (  0)
-Hanging             = ( 52 shl 16) + ( 30)
-HinderPassedPawn    = (  4 shl 16) + (  0)
+Hanging             = ( 57 shl 16) + ( 32)
 KingProtector_Pt    = ( -6 shl 16) + ( -6)
 KnightOnQueen       = ( 21 shl 16) + ( 11)
-LongRangedBishop    = ( 22 shl 16) + (  0)
+LongDiagonalBishop  = ( 46 shl 16) + (  0)
 MinorBehindPawn     = ( 16 shl 16) + (  0)
-PawnlessFlank       = ( 20 shl 16) + ( 80)
-RookOnPawn          = (  8 shl 16) + ( 24)
+PawnlessFlank       = ( 19 shl 16) + ( 84)
+RookOnPawn          = ( 10 shl 16) + ( 29)
 Overload            = ( 13 shl 16) + (  6)
 SliderOnQueen       = ( 42 shl 16) + ( 21)
-ThreatByKing        = (23 shl 16)  + ( 76)
+ThreatByKing        = ( 22 shl 16) + ( 78)
 ThreatByPawnPush    = ( 45 shl 16) + ( 40)
 ThreatByRank        = ( 16 shl 16) + (  3)
 ThreatBySafePawn    = (173 shl 16) + (102)
 TrappedBishopA1H1   = ( 50 shl 16) + ( 50)
-TrappedRook         = ( 92 shl 16) + (  0)
+TrappedRook         = ( 96 shl 16) + (  5)
 WeakQueen           = ( 50 shl 16) + ( 10)
-WeakUnopposedPawn   = ( 5 shl  16) + ( 29)
+WeakUnopposedPawn   = ( 15 shl 16) + ( 19)
 
 LazyThreshold = 1500
 
@@ -160,8 +159,8 @@ macro EvalPieces Us, Pt
 	OutpostRanks	  = 0x000000FFFFFF0000
   end if
 
-	RookOnFile0	  = ((20 shl 16) + (7))
-	RookOnFile1	  = ((45 shl 16) + (20))
+	RookOnFile0	  = (18 shl 16) + ( 7)
+	RookOnFile1	  = (44 shl 16) + (20)
 
   if Pt	= Knight
 	Outpost0	  = ((22 shl 16) + ( 6))
@@ -320,8 +319,7 @@ OutpostDone:
     ; Bonus for	bishop on a long diagonal which	can "see" both center squares
 		mov   rdx, qword[rbp	+ Pos.typeBB + 8*Pawn]
       BishopAttacks   rax, r14,	rdx,	rcx
-		bts   rax, r14
-		lea   edx, [rsi	+ (Them	- Us)*LongRangedBishop]
+		lea   edx, [rsi + (Them - Us)*LongDiagonalBishop]
 		mov   r8, (FileDBB or FileEBB) and (Rank4BB or Rank5BB)
 		and   rax, r8
 		lea   rcx, [rax	- 1]
@@ -531,9 +529,29 @@ KingSafetyDoneRet:
 		lea     eax, [rdi-873]
 		cmovz   edi, eax
 
+		mov    rcx, r11
+		and    rcx, 7
+		mov   rcx, qword[KingFlank+8*rcx]
+		mov   rax, Camp
+		and   rax, rcx
+		and   rax, AttackedByThem
+		mov   rdx, qword[.ei.attackedBy+8*(8*Us+Pawn)]
+		not   rdx
+		and   rdx, qword[.ei.attackedBy2+8*Them]
+		and   rdx, rax
+	if Us eq White
+		shl   rax, 4
+	else
+		shr   rax, 4
+	end if
+		or   rax, rdx
+		_popcnt   rax, rax, r9
+		shl  eax, 2
+		add  edi, eax
+
 	; the following	does edi += - 9*mg_value(score)/8 + 40
 		lea   ecx, [rsi+0x08000]
-		sub   edi, 2
+		sub   edi, 30
 		sar   ecx, 16
 		lea   ecx, [2*rcx+rcx]
 		shl   ecx, 1
@@ -612,22 +630,21 @@ KingSafetyDoneRet:
 		or    rdx, r9
 
 		_popcnt rax, rdx, rcx
-		imul  eax, 129
+		imul  eax, 150
 		add   edi, eax
 
 	; Compute the king danger score and subtract it from the evaluation
 
-                mov   ecx, dword[.ei.mobilityDiff]
+		mov   ecx, dword[.ei.mobilityDiff]
 		add   ecx, 0x08000
 		sar   ecx, 16
-		cmp   edi, 0
-		jle   AllDone
-        if Us = White
-                sub   edi, ecx
-        else
-                add   edi, ecx
-        end if
-                 js   AllDone
+		if Us = White
+				sub   edi, ecx
+		else
+				add   edi, ecx
+		end if
+		test  edi, edi
+		js   AllDone
 		mov   eax, edi
 		shr   eax, 4		; kingDanger / 16
 		sub   esi, eax
@@ -770,28 +787,22 @@ macro ShelterStorm Us
 		mov   r10, PiecesThem
 		and   r10, r8
 	; r10 = theirPawns
-        mov  rax, qword[FileBB+8*rcx]
-		and  rax, r9
-		cmp  rax, 1
-		sbb  eax, eax
-		and  eax, -10 ; saves instructions and keeps code linear
-		add  eax, 5
-	; eax = saftey
 
 ;  if ((shift<Down>(theirPawns) & (FileABB | FileHBB) & BlockRanks) & ksq)
         mov  r11, r10
         ShiftBB  Down, r11, r11
-        mov  r12, r11 ; r12 = shift<Down>(theirPawns)
+        mov  rax, r11 ; rax = shift<Down>(theirPawns)
         mov  r11, FileABB or FileHBB
-        and  r12, r11 ; r12 & (FileABB|FileHBB)
+        and  rax, r11 ; rax & (FileABB|FileHBB)
         mov  r11, BlockRanks
-        and  r12, r11 ; r12 & BlockRanks
+        and  rax, r11 ; rax & BlockRanks
         mov  r11, PiecesUs
         and  r11, qword [rbp+Pos.typeBB+8*King]
-        and  r12, r11 ; r12 & ksq
-        test r12, r12
-        jz  @f
-        add eax, 374
+        and  rax, r11 ; rax & ksq
+        cmp  rax, 1
+        sbb  eax, eax  ; dest = dest - (src + CF);
+        and  eax, -369 ; saves instructions and keeps code linear
+        add  eax, 374  ; eax = safety
 
 @@:
 	if Us eq Black
@@ -997,7 +1008,6 @@ SafeThreatsDone:
 		jz   ThreatMinorDone
 ThreatMinorLoop:
 		bsf   rax, r8
-		mov   rdx, rax
 		movzx   ecx, byte[rbp+Pos.board+rax]
 		addsub   esi, dword[Threat_Minor+4*rcx]
 		shr   eax, 3
@@ -1009,22 +1019,7 @@ ThreatMinorLoop:
 		and   eax, dword[IsNotPawnMasks+rcx]
 		imul   eax, ThreatByRank
 		addsub   esi, eax
-		test eax, eax
-		jnz @f
 
-		mov  rax, qword[.ei.pinnedPieces+8*Them]
-		bt  rax, rdx
-		jnc @f
-
-		shr   edx, 3
-		if Us eq White
-			xor   edx, Them*7
-		end if
-		imul   edx, ThreatByRank
-		shr   edx, 1
-		addsub   esi, edx
-
-	@@:
 		_blsr   r8, r8, rcx
 		jnz   ThreatMinorLoop
 ThreatMinorDone:
@@ -1035,7 +1030,6 @@ ThreatMinorDone:
 		jz   ThreatRookDone
 ThreatRookLoop:
 		bsf   rax, rdx
-		mov   r8, rax
 		movzx   ecx, byte[rbp+Pos.board+rax]
 		addsub   esi, dword[Threat_Rook+4*rcx]
 
@@ -1046,22 +1040,7 @@ ThreatRookLoop:
 		and   eax, dword[IsNotPawnMasks+rcx]
 		imul   eax, ThreatByRank
 		addsub   esi, eax
-		test  eax, eax
-		jnz  @f
 
-		mov  rax, qword[.ei.pinnedPieces+8*Them]
-		bt  rax, r8
-		jnc @f
-
-		shr   r8d, 3
-		if Us eq White
-			xor   r8d, Them*7
-		end if
-		imul   r8d, ThreatByRank
-		shr   r8d, 1
-		addsub   esi, r8d
-
-	@@:
 		_blsr   rdx, rdx, rcx
 		jnz   ThreatRookLoop
 ThreatRookDone:
@@ -1130,9 +1109,6 @@ WeakDone:
 		ShiftBB   Right,	rdx, rcx
 		or   rax, rdx
 		and   rax, PiecesThem
-		mov   rcx, qword[.ei.attackedBy+8*(8*Us+Pawn)]
-		not   rcx
-		and   rax, rcx
 		_popcnt   rax, rax,	rdx
 		imul   eax, ThreatByPawnPush
 		addsub   esi, eax
@@ -1255,15 +1231,10 @@ NextPawn:
 		mov   rax, qword[ForwardBB+8*(64*Us+r8)]
 		add   r8d, Up
 	; r8d = blockSq
-		mov   rdx, PiecesThem
-		and   rax, rdx
-		_popcnt   rax, rax, r10
-		imul   eax, HinderPassedPawn
-		subadd   dword[.ei.score], eax
 
                 mov  edi, dword[PassedDanger + 4*rcx]
 	; ecx = r
-        ; edi = PassedDanger[r]
+        ; edi = int w = PassedDanger[r]
 
 
   if Us = White
@@ -1299,7 +1270,7 @@ NextPawn:
 		add   esi, eax
 
 		mov   r10, qword[ForwardBB+8*(64*Us+s)]
-		lea   eax, [rdi+2*rcx]
+		xor  eax, eax
 		bt   PiecesUs, r8
 		jc   AddToBonus	; the pawn is blocked by us
 		mov   r11, r10
@@ -1747,7 +1718,6 @@ end virtual
 		EvalSpace   White
 .SkipSpace:
 
-		mov   r14, rdi
 		mov   r15, qword[.ei.me]
 
 	; Evaluate position potential for the winning side
@@ -1762,11 +1732,12 @@ end virtual
 		and   r8, rcx
 		cmovnz   r8d, eax
 
-		_popcnt   rax, r11,	rcx
-		movzx   edx, byte[rdi+PawnEntry.asymmetry]
-		lea   edx, [rdx+rax-17]
+		_popcnt   rax, r11, rcx
+		movzx  edx, byte[rdi+PawnEntry.asymmetry]
+		mov  r14d, edx ; save for later
+		add  edx, eax
 		lea   r8d, [r8+4*rax]
-		lea   r8d, [r8+8*rdx]
+		lea   r8d, [r8+8*rdx-118]
 
 		movzx   r9d, word[rbx+State.npMaterial+2*0]
 		movzx   ecx, word[rbx+State.npMaterial+2*1]
@@ -1815,7 +1786,7 @@ end virtual
 		add   esi, eax
 
 	; esi = score
-	; r14 = ei.pi
+	; r14d = byte[rdi+PawnEntry.asymmetry]
 
 	; scale_factor() computes the scale factor for the winning side
 
@@ -1849,7 +1820,6 @@ end virtual
 		mov   r10, qword[rbp+Pos.typeBB+8*Bishop]
 		mov   r8, qword[rbp+Pos.typeBB+8*White]
 		mov   r9, qword[rbp+Pos.typeBB+8*Black]
-		mov   edi, dword[rbx+State.npMaterial]
 		and   r8, r10
 		and   r9, r10
 		test   ecx, -17 ; not 16
@@ -1866,10 +1836,11 @@ end virtual
 		jz   @f
 		or   r8, r9
 		jnz  @f
-		cmp   edi, (BishopValueMg shl 16) + BishopValueMg
+		mov   r8d, dword[rbx+State.npMaterial]
+		cmp   r8d, (BishopValueMg shl 16) + BishopValueMg
 		mov  edx, 2
 		jne  @f
-		mov   eax, 31
+		lea  eax, [4*r14+8]
 		jmp   .ScaleFactorDone
 
 	@@:
@@ -1892,18 +1863,18 @@ end virtual
   ;v /= int(PHASE_MIDGAME);
 		movzx edx, byte[r15+MaterialEntry.gamePhase] ; edx = phase
 		mov   ecx, dword[rbp+Pos.sideToMove]
-		mov   edi, 128
-		sub   edi, edx
-		imul   edi, r12d
+		mov   r8d, 128
+		sub   r8d, edx
+		imul   r8d, r12d
 		mov   r11d, ecx
-		imul   edi, eax
-		lea   r14d, [rdi+3FH]
-		test   edi, edi
-		cmovs   edi, r14d
+		imul   r8d, eax
+		lea   r10d, [r8+63]
+		test   r8d, r8d
+		cmovs   r8d, r10d
 		imul   esi, edx
-		sar   edi, 6
-		lea   edx, [rdi+rsi]
-		lea   eax, [rdx+7FH]
+		sar   r8d, 6
+		lea   edx, [r8+rsi]
+		lea   eax, [rdx+127]
 		test   edx, edx
 		cmovs   edx, eax
 		neg   r11d

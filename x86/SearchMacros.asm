@@ -1,6 +1,4 @@
-; RazorMargin[] =
-RazorMargin1 = 590
-RazorMargin2 = 604
+RazorMargin = 600
 
 macro search RootNode, PvNode
 	; in:
@@ -38,6 +36,7 @@ macro search RootNode, PvNode
     .bestValue		rd 1
     .value		rd 1
     .evalu		rd 1
+    .pureStaticEval		rd 1
     .nullValue		rd 1
     .futilityValue	rd 1
     .extension		rd 1
@@ -98,17 +97,19 @@ Display	2, "Search(alpha=%i1, beta=%i2, depth=%i8) called%n"
 		jne   @1f
 
  if PvNode = 1
-		mov   ecx, VALUE_DRAW
-		mov   dword[.alpha], ecx
-		mov   edx, dword[.beta]
-		mov   eax, ecx
-		cmp   ecx, edx
+		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
+		cmp   eax, dword[.beta]
+		mov   dword[.alpha], eax
 		jl   @1f
 else
-		mov   eax, VALUE_DRAW
+		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
+		cmp   eax, dword[.beta]
+		jl   @2f
 end if
 
 		jmp .Return
+@2:
+		mov   dword[.alpha], eax
 @1:
 end if
 
@@ -318,14 +319,16 @@ end if
 		mov   eax, VALUE_NONE
 		mov   dword [.evalu], eax
 		mov   dword[rbx+State.staticEval], eax
+		mov   dword[.pureStaticEval], eax
 		mov   rcx, qword[rbx+State.checkersBB]
 		mov   byte[.improving],	0
 		test   rcx, rcx
 		jnz   .moves_loop
 		mov   edx, dword[rbx-1*sizeof.State+State.currentMove]
 		movsx   eax, word[.ltte+MainHashEntry.eval_]
-		test   r13d, r13d
+		test   r13d, r13d ; if (ttHit)
 		jnz   .StaticValueYesTTHit
+
 .StaticValueNoTTHit:
 		mov   eax, dword[rbx-1*sizeof.State+State.staticEval]
 		neg   eax
@@ -334,66 +337,96 @@ end if
 		cmp   edx, MOVE_NULL
 		je   @1f
 		call   Evaluate
+		mov  r11d, dword[rbx-1*sizeof.State+State.statScore]
+		; r11d = p = (ss-1)->statScore
+		test r11d, r11d
+		jle  @1f
+		mov  edx, r11d
+		neg  edx
+		sub  edx, 2500
+		lea  r8d, [rdx + 511]
+		test  edx, edx
+		cmovs  edx, r8d
+		sar  edx, 9
+		jmp  @2f
+
 	@1:
-		mov   r8d, eax
+		test  r11d, r11d
+		mov  edx, 0
+		jns  @2f
+
+		mov  edx, r11d
+		neg  edx
+		add  edx, 2500
+		lea  r9d, [rdx + 511]
+		test  edx, edx
+		cmovs  edx, r9d
+		sar  edx, 9
+
+	@2:
+		mov  dword[.pureStaticEval], eax
+		add  eax, edx
 		mov   dword[rbx+State.staticEval], eax
 		mov   dword[.evalu], eax
-		mov   r9, qword	[.posKey]
+		mov   r9, qword [.posKey]
 		shr   r9, 48
 		mov   edx, VALUE_NONE
-      MainHash_Save   .ltte, r12, r9w, edx, BOUND_NONE,	DEPTH_NONE, 0, r8w
+      MainHash_Save   .ltte, r12, r9w, edx, BOUND_NONE,	DEPTH_NONE, 0, word[.pureStaticEval]
 		jmp   .StaticValueDone
+
 .StaticValueYesTTHit:
-		cmp   eax, VALUE_NONE
-		jne   @1f
+; Structure:
+		; else if (ttHit)
+				; If_1a
+				; If_2a && (If_2b & If_2c)
+
+; else if (ttHit)
+  .If_1a:
+		cmp   eax, VALUE_NONE ; eax = word[.ltte+MainHashEntry.eval_] = tte->eval()
+		jne   @f
 		call   Evaluate
-	@1:
+   @@:
 		xor   ecx, ecx
+		mov   dword[.pureStaticEval], eax
 		mov   dword[rbx+State.staticEval], eax
+
+  .If_2c:
 		cmp   edi, eax
 		setg   cl
 		add   ecx, BOUND_UPPER
 		cmp   edi, VALUE_NONE
-		je   @1f
-		test   cl, byte[.ltte+MainHashEntry.genBound]
-		cmovnz   eax, edi
-	@1:
-		mov   dword[.evalu], eax
-.StaticValueDone:
+		je   .If_1a_ctd
 
-		; Step 7. Razoring (skipped	when in	check)
-  if PvNode = 0
-		mov   edx, dword[.depth]
-		cmp   edx, 2*ONE_PLY
-		jg    .6skip
-	if USE_MATEFINDER =	1
-		lea   eax, [rcx+2*VALUE_KNOWN_WIN-1]
-		cmp   eax, 4*VALUE_KNOWN_WIN-1
-		jae   .6skip
-	end	if
+  .If_2b:
+		test   cl, byte[.ltte+MainHashEntry.genBound]
+		cmovnz   eax, edi ; eval = ttValue;
+
+  .If_1a_ctd:
+		mov   dword[.evalu], eax ; eval = ss->staticEval = evaluate(pos)
+
+.StaticValueDone:
+		; Step 7. Razoring (skipped when in check)
+		mov  edx, dword[.depth]
+		cmp  edx, 1*ONE_PLY
+		jg   .7skip
+	if USE_MATEFINDER = 1
+		lea  eax, [rcx+2*VALUE_KNOWN_WIN-1]
+		cmp  eax, 4*VALUE_KNOWN_WIN-1
+		jae  .7skip
+	end if
 		mov  ecx, dword[.alpha]
-		cmp  edx, ONE_PLY
-		jne  @1f
-		lea  eax, [ecx - RazorMargin1]
+		lea  eax, [ecx - RazorMargin]
 		cmp  eax, dword[.evalu]
-		jl   @1f
-		lea  edx, [rcx + 1]
+		jl  .7skip
+		mov  edx, dword[.beta]
 		xor  r8d, r8d
-		   call  QSearch_NonPv_NoCheck
+		if PvNode = 0
+			call  QSearch_NonPv_NoCheck
+		else
+			call  QSearch_Pv_NoCheck
+		end if
 		jmp  .Return
-@1:
-		lea  eax, [ecx - RazorMargin2]
-		cmp  eax, dword[.evalu]
-		 jl  .6skip
-		xor   r8d, r8d
-		sub   ecx, RazorMargin2
-		lea   edx, [rcx+1]
-		mov   esi, ecx
-		call   QSearch_NonPv_NoCheck
-		cmp   eax, esi
-		jle   .Return
-.6skip:
-  end if
+.7skip:
 		mov   edx, dword[rbx-0*sizeof.State+State.staticEval]
 		mov   ecx, dword[rbx-2*sizeof.State+State.staticEval]
 		cmp   edx, ecx
@@ -447,14 +480,14 @@ end if
 	; Step 9. Null move search with verification search (is omitted in PV nodes)
   if PvNode = 0
 		mov  edx, dword[rbx-1*sizeof.State+State.statScore]
-		cmp  edx, 22500
+		cmp  edx, 23200
 		jge  .8skip
 		mov   edx, dword[rbx-1*sizeof.State+State.currentMove]
 		cmp   edx, MOVE_NULL
 		je  .8skip
 		mov   edx, dword[.depth]
 		imul   eax, edx,	36
-		add   eax, dword[rbx+State.staticEval]
+		add   eax, dword[.pureStaticEval]
 		mov   esi, dword[.beta]
 		cmp   esi, dword[.evalu]
 		jg   .8skip
@@ -528,7 +561,7 @@ end if
 
 		mov   eax, dword[.evalu]
 		sub   eax, dword[.beta]
-		mov   ecx, PawnValueMg
+		mov   ecx, 200
 		xor   edx, edx
 		idiv  ecx
 		mov   ecx, 3
@@ -677,7 +710,8 @@ end if
 .9moveloop:
 		xor   esi, esi
 	GetNextMove
-		mov   dword[.move], eax
+		mov   r12d, eax
+		; r12d = move
 		mov   ecx, eax
 		mov   r13d, dword[.rbeta]
         ; r13d = rbeta
@@ -686,11 +720,14 @@ end if
 		call   Move_IsLegal
 		test   eax, eax
 		 jz   .9moveloop
+		mov  eax, r12d
+		cmp  dword[.excludedMove], r12d
+		je   .9moveloop
 
 		cmp    dword[.probCutCount], 3
 		jge   .9moveloop_done
 		add    dword[.probCutCount], 1
-		mov   ecx, dword[.move]
+		mov   ecx, r12d
 		mov   dword[rbx+State.currentMove], ecx
 		mov   eax, ecx
 		shr   eax, 6
@@ -703,9 +740,9 @@ end if
 		add   rax, qword[rbp+Pos.counterMoveHistory]
 		mov   qword[rbx+State.counterMoves], rax
 
-		mov   ecx, dword[.move]
+		mov   ecx, r12d
 		call   Move_GivesCheck
-		mov   ecx, dword[.move]
+		mov   ecx, r12d
 		mov   byte[rbx+State.givesCheck], al
 		call   Move_Do__ProbCut
 
@@ -725,7 +762,7 @@ end if
 		mov  esi, eax
 		cmp  eax, dword[.rbeta]
 		jge  @f
-		mov   ecx, dword[.move]
+		mov   ecx, r12d
 		call   Move_Undo
 		mov   eax, esi
 		cmp   esi, r13d
@@ -741,7 +778,7 @@ end if
 		neg  eax
 		mov  esi, eax
 
-		mov   ecx, dword[.move]
+		mov   ecx, r12d
 		call   Move_Undo
 		mov   eax, esi
 		cmp   esi, r13d
@@ -973,8 +1010,7 @@ end if
 		and   edi, ecx
 		sar   edi, 31
 		mov   byte[.moveCountPruning], dil
-		not   edi
-		and   edi, eax  ; edi = givesCheck && !moveCountPruning
+		mov   edi, eax  ; edi = givesCheck
     ; Step 13. Extend checks
 		mov   al, byte[.singularExtensionNode]
 		mov   ecx, dword[.move]
@@ -1092,20 +1128,13 @@ end if
 		lea   r11, [8*r11+r13]
 		mov   eax, dword[r8+4*r11]
 		mov   ecx, dword[r9+4*r11]
-		cmp   edi, 4*ONE_PLY
-		jge   @f
-		cmp  edi, 3*ONE_PLY
-		jl   @1f
-
-  if PvNode = 1
-		jmp @f
-  else
-		mov  edx, dword[rbx-1*sizeof.State+State.statScore]
-		cmp  edx, 0
-		jle  @f
-  end if
-
-@1:
+		xor   edx, edx
+		mov   r10d, 2
+		mov   r9d, 3
+		cmp   edx, dword[rbx-1*sizeof.State+State.statScore]
+		cmovl  r10d, r9d
+		cmp   edi, r10d
+		jg  @f
   if CounterMovePruneThreshold <> 0     ; code assumes
 		err
   end if
@@ -1205,34 +1234,27 @@ end if
 		mov   r8l, byte[.captureOrPromotion]
 		mov   edi, dword[.reduction]
 		mov   ecx, 15
-	       test   r8l, r8l
-		 jz   .15NotCaptureOrPromotion
-		 mov  r9d, dword[rbx-2*sizeof.State+State.statScore] ; (ss-1)->statScore >= 0
-		shr  r9d, 31
-		add  edi, 1
-		sub  edi, r9d
-		lea   eax, [rdi	- 1]
+		test   r8l, r8l
+		 jz   @f
 		cmp   byte[.moveCountPruning], 0
 		je   .StartStep17
-	       test   edi, edi
-	     cmovnz   edi, eax
-		jmp   .15ReadyToSearch
-
-.15NotCaptureOrPromotion:
     ; r12d = from
     ; r13d = to
     ; r14d = from piece
     ; r15d = to	piece
     ; ecx = 15
 
+@@:
     ; Decrease reduction if opponent's move count is high
-		cmp   ecx, dword[rbx	- 2*sizeof.State + State.moveCount]
+		cmp  ecx, dword[rbx - 2*sizeof.State + State.moveCount]
+		sbb  edi, 0
+		test   r8l, r8l
+		jnz   .15ReadyToSearch
+    ; Decrease reduction for exact PV nodes
   if PvNode = 1
-		sbb   edi, dword[.pvExact]
-  else
-		sbb   edi, 0
-  end if
-    ; Increase reduction if ttMove is a	capture
+		sub   edi, dword[.pvExact]
+	end if
+    ; Increase reduction if ttMove is a capture
 		add   edi, dword[.ttCapture]
     ; Increase reduction for cut nodes
 		cmp   byte[.cutNode], 0
@@ -1267,6 +1289,7 @@ end if
 		add   eax, dword[r9+4*rdx]
 		add   eax, dword[r10+4*rdx]
 		add   eax, dword[r11+4*rdx]
+		mov   dword[rbx - 1*sizeof.State + State.statScore], eax
 
    ; Decrease/increase reduction by comparing opponent's stat score
 		mov   edx, ecx
@@ -1277,15 +1300,19 @@ end if
 		and   edx, eax
 		shr   edx, 31
 		add   edi, edx
-		mov   dword[rbx	- 1*sizeof.State + State.statScore], eax
 
-		cdq
-		mov   ecx, 20000
-	       idiv   ecx
-		xor   ecx, ecx
-		sub   edi, eax
-	      cmovs   edi, ecx
+; // Decrease/increase reduction for moves with a good/bad history.
+		mov   ecx, eax
+		mov   edx,  0x68DB8BAD
+		imul  edx
+		sar   edx, 13
+		sar   ecx, 31
+		sub   edx, ecx
+		sub   edi, edx
 .15ReadyToSearch:
+		xor  eax, eax
+		test  edi, edi
+		cmovs  edi, eax
 		mov   eax, 1
 		mov   r8d, dword[.newDepth]
 		sub   r8d, edi
@@ -1470,12 +1497,12 @@ end if
 		shl   ecx, 6
 		lea   r15d,	[rax+rcx]
 		mov   r12d,	dword[.bestMove]
-		mov   eax, dword[.depth]
+		mov   r13d, dword[.depth]
 		mov   edi, dword[.bestValue]
-		mov   r13d,	eax
-	       imul   eax, eax
-		lea   r10d,	[rax+2*r13-2]
-		lea   r14d, [r10+2*(r13+1)+1]
+		stat_bonus  r10d, rax, r13
+		add   r13, 1
+		stat_bonus  r14d, rax, r13
+		sub   r13, 1
     ; r15d = offset of [piece_on(prevSq),prevSq]
     ; r12d = move
     ; r13d = depth
@@ -1513,7 +1540,8 @@ end if
 		jne   .20TTStore
 		cmp   byte[rbx+State.capturedPiece], 0
 		jne   .20TTStore
-		imul  r11d, r10d, -BONUS_MULTIPLIER
+		mov  r11d, r10d
+		neg  r11d ; negative bonus
 		cmp   r10d, BONUS_MAX
 		jae   .20TTStore
 		abs_bonus r11d, r10d
@@ -1542,7 +1570,7 @@ end if
 	@@:
 		cmp   byte[rbx+State.capturedPiece], 0
 		jne   .20TTStore
-		imul   r11d, r10d, BONUS_MULTIPLIER
+		mov   r11d, r10d
 		cmp   r10d, BONUS_MAX
 		jae   .20TTStore
 		abs_bonus r11d, r10d
@@ -1575,7 +1603,7 @@ end if
 		cmp   edi, dword[.beta]
 	     cmovge   esi, ecx
   end if
-      MainHash_Save   .ltte, r8, r9w, edx, sil,	byte[.depth], eax, word[rbx+State.staticEval]
+      MainHash_Save   .ltte, r8, r9w, edx, sil,	byte[.depth], eax, word[.pureStaticEval]
 .ReturnBestValue:
 		mov   eax, edi
 .Return:
@@ -1602,16 +1630,15 @@ Display	2, "Search returning %i0%n"
 
              calign  8
 .AbortSearch_PlyBigger:
+		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
 		mov  rcx, qword[rbx + State.checkersBB]
-		xor  eax, eax  ; mov eax, VALUE_DRAW
                test  rcx, rcx
                  jz  .Return
 	       call  Evaluate
-		jmp  .Return
 
              calign   8
 .AbortSearch_PlySmaller:
-                xor  eax, eax  ;mov   eax, VALUE_DRAW
+		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
                 jmp  .Return
   end if
 
@@ -1620,10 +1647,8 @@ Display	2, "Search returning %i0%n"
 .ReturnTTValue:
     ; edi = ttValue
 		mov   r12d,	ecx
-		mov   eax, dword[.depth]
-		mov   r13d,	eax
-	       imul   eax, eax
-		lea   r10d,	[rax+2*r13-2]
+		mov   r13d, dword[.depth]
+		stat_bonus  r10d, rax, r13
     ; r12d = move
     ; r13d = depth
     ; r10d = bonus
@@ -1654,14 +1679,17 @@ Display	2, "Search returning %i0%n"
 .ReturnTTValue_UpdateCaptureStats:
 ;UpdateCaptureStats   r12d, 0, 0, r11d,	r10d
 .ReturnTTValue_UpdateStatsDone:
-		mov   eax, edi
-		lea   r10d,	[r10+2*(r13+1)+1]
+		add   r13, 1
+		stat_bonus  r10d, rax, r13
+		sub   r13, 1
     ; r10d = penalty
 		cmp   dword[rbx-1*sizeof.State+State.moveCount], 1
+		mov   eax, edi
 		jne   .Return
 		cmp   byte[rbx+State.capturedPiece], 0
 		jne   .Return
-		imul   r11d, r10d, -BONUS_MULTIPLIER
+		mov   r11d, r10d
+		neg   r11d ; negative bonus
 		cmp   r10d, BONUS_MAX
 		jae   .Return
 		abs_bonus r11d, r10d
@@ -1677,7 +1705,8 @@ Display	2, "Search returning %i0%n"
 		; r8 = offset in history table
 		test   dl, dl
 		jnz   .Return
-		imul   r11d, r10d, -BONUS_MULTIPLIER
+		mov   r11d, r10d
+		neg   r11d
 		cmp   r10d, BONUS_MAX
 		jae   .Return
 		abs_bonus r11d, r10d

@@ -1,3 +1,14 @@
+macro stat_bonus statbonus, s, x
+; x = depths = depth^2
+		mov   r9d, r13d
+		imul  r9d, r13d ; r9d = x^2
+		imul  r9d, 29
+		imul  eax, r13d, 138 ; rax = 138*x
+		add   r9d, eax
+		sub   r9d, 134
+		mov   statbonus, r9d
+end macro
+
 macro abs_bonus bonus, t
 		mov edx, bonus
 		sar edx, 31
@@ -306,8 +317,8 @@ WhileLoop:
             shl  ecx, 3
             add  ecx, eax
             mov  eax, dword[r8 + 4*rcx]
-            mov  r9d, edx ; prepares for signed division by 16
-            mov  ecx, 16
+            mov  r9d, edx ; prepares for signed division by 8
+            mov  ecx, 8
             cdq
             idiv  ecx ; hammers edx
             mov  edx, r9d ; reloads edx

@@ -67,16 +67,18 @@ Evaluate_Init:
           rep movsd
 
 		lea   rdi, [KingFlank]
+		mov   rax, (FileABB or FileBBB or FileCBB or FileDBB) xor FileDBB
+	      stosq
 		mov   rax, (FileABB or FileBBB or FileCBB or FileDBB)
 	      stosq
 	      stosq
-	      stosq
 		shl   rax, 2
 	      stosq
 	      stosq
 		shl   rax, 2
 	      stosq
 	      stosq
+		mov   rax, (FileEBB or FileFBB or FileGBB or FileHBB) xor FileEBB
 	      stosq
 
                 lea   rdi, [QueenMinorsImbalance]
@@ -92,15 +94,15 @@ Evaluate_Init:
  dd 0, 0, 0, 3, 7, 11, 20, 0
 
 .MobilityBonus_Knight:
- dd (-75 shl 16) + (-76)
- dd (-57 shl 16) + (-54)
- dd (- 9 shl 16) + (-28)
- dd ( -2 shl 16) + (-10)
- dd (  6 shl 16) + (5)
- dd ( 14 shl 16) + (12)
- dd ( 22 shl 16) + (26)
- dd ( 29 shl 16) + (29)
- dd ( 36 shl 16) + (29)
+ dd (-62 shl 16) + (-81)
+ dd (-53 shl 16) + (-56)
+ dd (-12 shl 16) + (-30)
+ dd ( -4 shl 16) + (-14)
+ dd (  3 shl 16) + (  8)
+ dd ( 13 shl 16) + ( 15)
+ dd ( 22 shl 16) + ( 23)
+ dd ( 28 shl 16) + ( 27)
+ dd ( 33 shl 16) + ( 33)
 
 .MobilityBonus_Bishop:
  dd (-48 shl 16) + (-59)
@@ -181,14 +183,14 @@ Evaluate_Init:
 ; to avoid an anoying min(f,FILE_H-f) in ShelterStorm
 .ShelterStrength:
 .ShelterStrengthArray:
-dd  -3,  81,  93,  58,  39,  18,   25, 0
-dd -40,  61,  35, -49, -29, -11,  -63, 0
-dd  -7,  75,  23,  -2,  32,   3,  -45, 0
-dd -36, -13, -29, -52, -48, -67, -166, 0
-dd -36, -13, -29, -52, -48, -67, -166, 0
-dd  -7,  75,  23,  -2,  32,   3,  -45, 0
-dd -40,  61,  35, -49, -29, -11,  -63, 0
-dd  -3,  81,  93,  58,  39,  18,   25, 0
+dd  -6,  81,  93,  58,  39,  18,   25, 0
+dd -43,  61,  35, -49, -29, -11,  -63, 0
+dd -10,  75,  23,  -2,  32,   3,  -45, 0
+dd -39, -13, -29, -52, -48, -67, -166, 0
+dd -39, -13, -29, -52, -48, -67, -166, 0
+dd -10,  75,  23,  -2,  32,   3,  -45, 0
+dd -43,  61,  35, -49, -29, -11,  -63, 0
+dd  -6,  81,  93,  58,  39,  18,   25, 0
 
 .StormDanger:
 dd  89, 107, 123, 93, 57,  45,  51, 0  ; // UnblockedStorm
@@ -216,7 +218,7 @@ dd 0, 0, 66, 6, 5, 1, 15, 0
  dd (39 shl 16) + (42)
  dd (57 shl 16) + (44)
  dd (68 shl 16) + (112)
- dd (47 shl 16) + (120)
+ dd (62 shl 16) + (120)
  dd (0 shl 16) + (0)
 
 .Threat_Rook:
@@ -226,7 +228,7 @@ dd 0, 0, 66, 6, 5, 1, 15, 0
  dd (38 shl 16) + (71)
  dd (38 shl 16) + (61)
  dd (0 shl 16) + (38)
- dd (36 shl 16) + (38)
+ dd (51 shl 16) + (38)
  dd (0 shl 16) + (0)
 
 
@@ -256,12 +258,12 @@ dd ( -1 shl 16) + (  7)
 
 
 .QuadraticOurs:
-	dd 0, 1667,    0,    0,    0,	 0,    0,    0
-	dd 0,	40,    0,    0,    0,	 0,    0,    0
-	dd 0,	32,  255,   -3,    0,	 0,    0,    0
+	dd 0, 1438,    0,    0,    0,	 0,    0,    0
+	dd 0,	40,   38,    0,    0,	 0,    0,    0
+	dd 0,	32,  255,  -62,    0,	 0,    0,    0
 	dd 0,	 0,  104,    4,    0,	 0,    0,    0
-	dd 0,  -26,   -2,   47,  105, -149,    0,    0
-	dd 0, -189,   24,  117,  133, -134,  -10,    0
+	dd 0,  -26,   -2,   47,  105, -208,    0,    0
+	dd 0, -189,   24,  117,  133, -134,   -6,    0
 .QuadraticTheirs:
 	dd 0,	 0,    0,    0,    0,	 0,    0,    0
 	dd 0,	36,    0,    0,    0,	 0,    0,    0
