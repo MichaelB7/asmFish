@@ -1,6 +1,6 @@
 #!/bin/csh
 
-### This cshell script builds asmfish on a macOS host for windows, linux android and macOS operating systems.  Simply type "Build" at the command line.  Takes about 5 minutes to run and then zips the binaries into a zip file.
+### This cshell script builds asmfish on a macOS host for windows, linux android and macOS operating systems.  Simply type "Build" at the command line .  Takes about 1 minute to run on my machine and then zips the binaries into a zip file.
 
 set echo off
 set start_time=`date +%s`
