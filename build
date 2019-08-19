@@ -50,7 +50,7 @@ zip zasmfish-$dat-$OS1.zip $base-$OS1 $popcnt-$OS1 $bmi1-$OS1 $bmi2-$OS1 &
 zip zasmfish-$dat-$OS2.zip $base-$OS2$exe $popcnt-$OS2$exe $bmi1-$OS2$exe $bmi2-$OS2$exe &
 zip zasmfish-$dat-$OS3.zip $base-$OS3 $popcnt-$OS3 $bmi1-$OS3 $bmi2-$OS3 $arm-$OS3 &
 wait
-mv zasmfish-$dat-$OS1.zip MacOS_binaries &
+mv zasmfish-$dat-$OS1.zip macOS_binaries &
 mv zasmfish-$dat-$OS2.zip WindowsOS_binaries &
 mv zasmfish-$dat-$OS3.zip LinuxOS_binaries &
 rm $base-$OS1 $popcnt-$OS1 $bmi1-$OS1 $bmi2-$OS1 &  

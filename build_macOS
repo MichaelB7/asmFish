@@ -1,0 +1,51 @@
+#!/bin/csh
+
+### This cshell script builds asmfish on a macOS host for windows, linux android and macOS operating systems.  Simply type "Build" at the command line .  Takes about 1 minute to run on my machine and then zips the binaries into a zip file.
+
+set echo off
+set start_time=`date +%s`
+echo $start_time
+
+set include=x86\include\
+set dat = `date +"%m%d%y"`
+set popcnt = "asmfish-popcnt-$dat"
+set bmi1 = "asmfish-bmi1-$dat"
+set bmi2 = "asmfish-bmi2-$dat"
+set base = "asmfish-base-$dat"
+set arm = "armfish-V8-$dat"
+set OS1 = "X"   ### macOS
+
+
+fasmg -p 1000 "x86/fish.asm" "$base-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'base'" &
+fasmg -p 1000 "x86/fish.asm" "$popcnt-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'popcnt'" &
+fasmg -p 1000 "x86/fish.asm" "$bmi1-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'bmi1'" &
+fasmg -p 1000 "x86/fish.asm" "$bmi2-$OS1" -e 1000 -i "VERSION_OS='X'" -i "VERSION_POST = 'bmi2'" &
+wait
+chmod 755 $base-$OS1 &
+chmod 755 $popcnt-$OS1 &
+chmod 755 $bmi1-$OS1 &
+chmod 755 $bmi2-$OS1 &
+
+wait
+zip zasmfish-$dat-$OS1.zip $base-$OS1 $popcnt-$OS1 $bmi1-$OS1 $bmi2-$OS1 &
+wait
+mv zasmfish-$dat-$OS1.zip macOS_binaries &
+rm $base-$OS1 $popcnt-$OS1 $bmi1-$OS1 $bmi2-$OS1 &  
+
+wait
+chmod 755 $base-$OS1 &
+chmod 755 $popcnt-$OS1 &
+chmod 755 $bmi1-$OS1 &
+chmod 755 $bmi2-$OS1 &
+wait
+
+
+
+set end_time = `date +%s`
+echo $end_time 
+echo execution time was `expr $end_time - $start_time` s.
+
+
+
+
+
