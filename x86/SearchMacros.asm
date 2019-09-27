@@ -1060,6 +1060,17 @@ end if
 		cmp   eax, edi
 		setl   cl
 		mov   dword[.extension], ecx
+		test  ecx, ecx
+		jnz  @f
+		movzx   r9d, byte[.cutNode]
+		mov  r8d, dword[.beta]
+		cmp  edi, r8d
+		setg  cl
+		and  ecx, r9d
+		jz  @f
+		mov  eax, r8d
+		jmp .Return
+@@:
     ; The call to search_NonPV with the	same value of ss messed	up our
     ; move picker data.	So we fix it.
 		mov   qword[rbx+State.stage], r12

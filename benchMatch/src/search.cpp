@@ -943,12 +943,12 @@ moves_loop: // When in check, search starts from here
           &&  tte->depth() >= depth - 3 * ONE_PLY
           &&  pos.legal(move))
       {
-          Value singularBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
+          Value reducedBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
           ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, depth / 2, cutNode);
+          value = search<NonPV>(pos, ss, reducedBeta - 1, reducedBeta, depth / 2, cutNode);
           ss->excludedMove = MOVE_NONE;
 
-          if (value < singularBeta)
+          if (value < reducedBeta)
               extension = ONE_PLY;
 
           // Multi-cut pruning
@@ -956,7 +956,7 @@ moves_loop: // When in check, search starts from here
           // search without the ttMove. So we assume this expected Cut-node is not singular,
           // that is multiple moves fail high, and we can prune the whole subtree by returning
           // the hard beta bound.
-          else if (cutNode && singularBeta > beta)
+          else if (cutNode && reducedBeta > beta)
               return beta;
       }
       else if (    givesCheck // Check extension (~2 Elo)
