@@ -113,8 +113,8 @@ namespace {
   Value value_from_tt(Value v, int ply);
   void update_pv(Move* pv, Move move, Move* childPv);
   void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus);
-  void update_quiet_stats(const Position& pos, Stack* ss, Move move, Move* quiets, int quietsCnt, int bonus);
-  void update_capture_stats(const Position& pos, Move move, Move* captures, int captureCnt, int bonus);
+  void update_quiet_stats(const Position& pos, Stack* ss, Move move, Move* quiets, int quietCount, int bonus);
+  void update_capture_stats(const Position& pos, Move move, Move* captures, int captureCount, int bonus);
 
   inline bool gives_check(const Position& pos, Move move) {
     Color us = pos.side_to_move();
@@ -254,7 +254,7 @@ void MainThread::search() {
       && !Skill(Options["Skill Level"]).enabled()
       &&  rootMoves[0].pv[0] != MOVE_NONE)
   {
-      std::map<Move, int> votes;
+      std::map<Move, int64_t> votes;
       Value minScore = this->rootMoves[0].score;
 
       // Find out minimum score and reset votes for moves which can be voted
@@ -265,12 +265,13 @@ void MainThread::search() {
       }
 
       // Vote according to score and depth
+      auto square = [](int64_t x) { return x * x; };
       for (Thread* th : Threads)
-          votes[th->rootMoves[0].pv[0]] +=  int(th->rootMoves[0].score - minScore)
-                                          + int(th->completedDepth);
+          votes[th->rootMoves[0].pv[0]] += 200 + (square(th->rootMoves[0].score - minScore + 1)
+                                                  * int64_t(th->completedDepth));
 
       // Select best thread
-      int bestVote = votes[this->rootMoves[0].pv[0]];
+      int64_t bestVote = votes[this->rootMoves[0].pv[0]];
       for (Thread* th : Threads)
       {
           if (votes[th->rootMoves[0].pv[0]] > bestVote)
@@ -302,7 +303,12 @@ void MainThread::search() {
 
 void Thread::search() {
 
-  Stack stack[MAX_PLY+7], *ss = stack+4; // To reference from (ss-4) to (ss+2)
+  // To allow access to (ss-5) up to (ss+2), the stack must be oversized.
+  // The former is needed to allow update_continuation_histories(ss-1, ...),
+  // which accesses its argument at ss-4, also near the root.
+  // The latter is needed for statScores and killer initialization.
+  Stack stack[MAX_PLY+8], *ss = stack+5;
+  Move  pv[MAX_PLY+1];
   Value bestValue, alpha, beta, delta;
   Move  lastBestMove = MOVE_NONE;
   Depth lastBestMoveDepth = DEPTH_ZERO;
@@ -311,9 +317,10 @@ void Thread::search() {
   Color us = rootPos.side_to_move();
   bool failedLow;
 
-  std::memset(ss-4, 0, 7 * sizeof(Stack));
-  for (int i = 4; i > 0; i--)
+  std::memset(ss-5, 0, 8 * sizeof(Stack));
+  for (int i = 5; i > 0; i--)
      (ss-i)->continuationHistory = &this->continuationHistory[NO_PIECE][0]; // Use as sentinel
+  ss->pv = pv;
 
   bestValue = delta = alpha = -VALUE_INFINITE;
   beta = VALUE_INFINITE;
@@ -491,32 +498,32 @@ void Thread::search() {
       if (    Limits.use_time_management()
           && !Threads.stop
           && !Threads.stopOnPonderhit)
+      {
+          double fallingEval = (306 + 119 * failedLow + 6 * (mainThread->previousScore - bestValue)) / 581.0;
+          fallingEval        = std::max(0.5, std::min(1.5, fallingEval));
+
+          // If the bestMove is stable over several iterations, reduce time accordingly
+          timeReduction = 1.0;
+          for (int i : {3, 4, 5})
+              if (lastBestMoveDepth * i < completedDepth)
+                  timeReduction *= 1.25;
+
+          // Use part of the gained time from a previous stable move for the current move
+          double bestMoveInstability = 1.0 + mainThread->bestMoveChanges;
+          bestMoveInstability *= std::pow(mainThread->previousTimeReduction, 0.528) / timeReduction;
+
+          // Stop the search if we have only one legal move, or if available time elapsed
+          if (   rootMoves.size() == 1
+              || Time.elapsed() > Time.optimum() * bestMoveInstability * fallingEval)
           {
-              double fallingEval = (306 + 119 * failedLow + 6 * (mainThread->previousScore - bestValue)) / 581.0;
-              fallingEval        = std::max(0.5, std::min(1.5, fallingEval));
-
-              // If the bestMove is stable over several iterations, reduce time accordingly
-              timeReduction = 1.0;
-              for (int i : {3, 4, 5})
-                  if (lastBestMoveDepth * i < completedDepth)
-                     timeReduction *= 1.25;
-
-              // Use part of the gained time from a previous stable move for the current move
-              double bestMoveInstability = 1.0 + mainThread->bestMoveChanges;
-              bestMoveInstability *= std::pow(mainThread->previousTimeReduction, 0.528) / timeReduction;
-
-              // Stop the search if we have only one legal move, or if available time elapsed
-              if (   rootMoves.size() == 1
-                  || Time.elapsed() > Time.optimum() * bestMoveInstability * fallingEval)
-              {
-                  // If we are allowed to ponder do not stop the search now but
-                  // keep pondering until the GUI sends "ponderhit" or "stop".
-                  if (Threads.ponder)
-                      Threads.stopOnPonderhit = true;
-                  else
-                      Threads.stop = true;
-              }
+              // If we are allowed to ponder do not stop the search now but
+              // keep pondering until the GUI sends "ponderhit" or "stop".
+              if (Threads.ponder)
+                  Threads.stopOnPonderhit = true;
+              else
+                  Threads.stop = true;
           }
+      }
   }
 
   if (!mainThread)
@@ -654,9 +661,8 @@ namespace {
                     update_quiet_stats(pos, ss, ttMove, nullptr, 0, stat_bonus(depth));
 
                 // Extra penalty for a quiet TT or main killer move in previous ply when it gets refuted
-                if (   (ss-1)->moveCount == 1
-                    || ((ss-1)->currentMove == (ss-1)->killers[0]) )
-                    if (!pos.captured_piece())
+                if (    ((ss-1)->moveCount == 1 || (ss-1)->currentMove == (ss-1)->killers[0])
+                     && !pos.captured_piece())
                         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + ONE_PLY));
             }
             // Penalty for a quiet ttMove that fails low
@@ -758,8 +764,9 @@ namespace {
     }
 
     // Step 7. Razoring (~2 Elo)
-    if (   depth < 2 * ONE_PLY
-        && eval <= alpha - RazorMargin)
+    if (   !rootNode // The required rootNode PV handling is not available in qsearch
+        &&  depth < 2 * ONE_PLY
+        &&  eval <= alpha - RazorMargin)
         return qsearch<NT>(pos, ss, alpha, beta);
 
     improving =   ss->staticEval >= (ss-2)->staticEval
@@ -936,13 +943,21 @@ moves_loop: // When in check, search starts from here
           &&  tte->depth() >= depth - 3 * ONE_PLY
           &&  pos.legal(move))
       {
-          Value reducedBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
+          Value singularBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
           ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, reducedBeta - 1, reducedBeta, depth / 2, cutNode);
+          value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, depth / 2, cutNode);
           ss->excludedMove = MOVE_NONE;
 
-          if (value < reducedBeta)
+          if (value < singularBeta)
               extension = ONE_PLY;
+
+          // Multi-cut pruning
+          // Our ttMove is assumed to fail high, and now we failed high also on a reduced
+          // search without the ttMove. So we assume this expected Cut-node is not singular,
+          // that is multiple moves fail high, and we can prune the whole subtree by returning
+          // the hard beta bound.
+          else if (cutNode && singularBeta > beta)
+              return beta;
       }
       else if (    givesCheck // Check extension (~2 Elo)
                &&  pos.see_ge(move))
@@ -1188,15 +1203,14 @@ moves_loop: // When in check, search starts from here
         update_capture_stats(pos, bestMove, capturesSearched, captureCount, stat_bonus(depth + ONE_PLY));
 
         // Extra penalty for a quiet TT or main killer move in previous ply when it gets refuted
-        if (   (ss-1)->moveCount == 1
-            || ( (ss-1)->currentMove == (ss-1)->killers[0] ) )
-            if (!pos.captured_piece())
+        if (   ((ss-1)->moveCount == 1 || ((ss-1)->currentMove == (ss-1)->killers[0]))
+            && !pos.captured_piece())
                 update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + ONE_PLY));
 
     }
     // Bonus for prior countermove that caused the fail low
     else if (   (depth >= 3 * ONE_PLY || PvNode)
-             && !pos.captured_piece() )
+             && !pos.captured_piece())
         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
 
     if (PvNode)
@@ -1475,7 +1489,7 @@ moves_loop: // When in check, search starts from here
   // update_capture_stats() updates move sorting heuristics when a new capture best move is found
 
   void update_capture_stats(const Position& pos, Move move,
-                            Move* captures, int captureCnt, int bonus) {
+                            Move* captures, int captureCount, int bonus) {
 
       CapturePieceToHistory& captureHistory =  pos.this_thread()->captureHistory;
       Piece moved_piece = pos.moved_piece(move);
@@ -1485,7 +1499,7 @@ moves_loop: // When in check, search starts from here
           captureHistory[moved_piece][to_sq(move)][captured] << bonus;
 
       // Decrease all the other played capture moves
-      for (int i = 0; i < captureCnt; ++i)
+      for (int i = 0; i < captureCount; ++i)
       {
           moved_piece = pos.moved_piece(captures[i]);
           captured = type_of(pos.piece_on(to_sq(captures[i])));
@@ -1497,7 +1511,7 @@ moves_loop: // When in check, search starts from here
   // update_quiet_stats() updates move sorting heuristics when a new quiet best move is found
 
   void update_quiet_stats(const Position& pos, Stack* ss, Move move,
-                          Move* quiets, int quietsCnt, int bonus) {
+                          Move* quiets, int quietCount, int bonus) {
 
     if (ss->killers[0] != move)
     {
@@ -1517,7 +1531,7 @@ moves_loop: // When in check, search starts from here
     }
 
     // Decrease all the other played quiet moves
-    for (int i = 0; i < quietsCnt; ++i)
+    for (int i = 0; i < quietCount; ++i)
     {
         thisThread->mainHistory[us][from_to(quiets[i])] << -bonus;
         update_continuation_histories(ss, pos.moved_piece(quiets[i]), to_sq(quiets[i]), -bonus);
@@ -1660,7 +1674,7 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
 
     assert(pv.size() == 1);
 
-    if (!pv[0])
+    if (pv[0] == MOVE_NONE)
         return false;
 
     pos.do_move(pv[0], st);
