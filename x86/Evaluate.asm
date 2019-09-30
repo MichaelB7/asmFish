@@ -1751,7 +1751,7 @@ end virtual
 		mov   rcx, FileEBB or FileFBB or FileGBB or FileHBB
 		and   r8, r11
 		and   rcx, r11
-		mov   eax, 16
+		mov   eax, 18
 		neg   r8
 		sbb   r8, r8
 		and   r8, rcx
@@ -1762,14 +1762,17 @@ end virtual
 		mov  r14d, edx ; save for later
 		add  edx, eax
 		lea   r8d, [r8+4*rax]
-		lea   r8d, [r8+8*rdx-118]
+		sub   r8d, eax
+		lea   r8d, [r8+8*rdx-121]
+		add   r8d, r14d
+
 
 		movzx   r9d, word[rbx+State.npMaterial+2*0]
 		movzx   ecx, word[rbx+State.npMaterial+2*1]
 		lea     r9d, [r9+rcx]
 		cmp     r9d, 1
 		sbb     r9d, r9d ; If the CF is 0, then r9d = 0.
-		and     r9d, 48
+		and     r9d, 49
 		lea     r8d, [r8+r9]
 
 		movsx r9d, si
@@ -1795,10 +1798,9 @@ end virtual
 		and   ecx, 7
 		sub   eax, ecx
 		abs  rax
+		sub  eax, r11d ; eax = outflanking
 
-		sub  eax, r11d
-		lea  eax, [rax+2*rax]
-		shl  eax, 2
+		lea  eax, [rax+8*rax]
 		add  eax, r8d
 
 	; eax = initiative
