@@ -15,7 +15,7 @@ ThreatByPawnPush    = ( 48 shl 16) + ( 39)
 ThreatByRank        = ( 13 shl 16) + (  0)
 ThreatBySafePawn    = (173 shl 16) + ( 94)
 TrappedBishopA1H1   = ( 50 shl 16) + ( 50)
-TrappedRook         = ( 96 shl 16) + (  4)
+TrappedRook         = (-47 shl 16) + ( -4)
 WeakQueen           = ( 49 shl 16) + ( 15)
 WeakUnopposedPawn   = ( 12 shl 16) + ( 23)
 
@@ -413,10 +413,8 @@ NoOpenFileBonus:
 		and  eax, 3 shl (2*Us)
 		setz  al
 		add  eax, 1
-		imul  r10d, 22*65536
-		sub  r10d, TrappedRook
-		imul  r10d, eax
-             addsub  esi, r10d
+		imul  eax, TrappedRook
+		addsub  esi, eax
 NoTrappedByKing:
 
   else if Pt = Queen
@@ -437,7 +435,7 @@ NoTrappedByKing:
 		_tzcnt   rcx, rax
 QueenPinLoop:
 		mov   rcx, qword[BetweenBB+r14+8*rcx]
-		_blsr   rax, rax,	r9
+		_blsr   rax, rax, r9
 		and   rcx, r13
 		_blsr   r8, rcx, r9
 		neg   r8
