@@ -263,17 +263,17 @@ end virtual
 		mov   ecx, 8
 	  rep movsd
 
-		lea   rsi, [.PSQR]
+		lea   rsi, [.PBONUS]
 		mov   r15d, Pawn
-.TypeLoop:
-	       imul   r12d, r15d, 8*64
+		imul  r12d, r15d, 8*64
 		lea   r12, [r12+Scores_Pieces]
 		lea   r11, [r12+8*8*64]
-
 		xor   r14d, r14d
-  .RankLoop:
+
+		.RankLoop_PBonus:
 		xor   r13d, r13d
-    .FileLoop:
+
+		.FileLoop_PBonus:
 		mov   eax, dword[PieceValue_EG+4*r15]
 		mov   edx, dword[PieceValue_MG+4*r15]
 		shl   edx, 16
@@ -281,51 +281,83 @@ end virtual
 		shr   edx, 16
 		add   eax, dword[rsi]
 		add   rsi, 4
-		cmp   r15d, Pawn
-		 ja   @f
-		xor   edx, edx
-	      @@:
-	; eax = piece square value
-	; edx = non pawn material
 
-	; set white abcd
+		; eax = piece square value
+
+		; white abcdefgh
+		lea   edi, [8*r14+r13]
+		mov   dword[r12+8*rdi+0], eax
+
+		; black abcdefgh
+		neg   eax
+		xor   edi, 0111000b
+		mov   dword[r11+8*rdi+0], eax
+
+		add   r13d, 1
+		cmp   r13d, 8
+		jb   .FileLoop_PBonus
+
+		add   r14d, 1
+		cmp   r14d, 8
+		jb   .RankLoop_PBonus
+
+		lea   rsi, [.PSQR]
+		mov   r15d, Knight
+
+		.TypeLoop:
+		imul   r12d, r15d, 8*64
+		lea   r12, [r12+Scores_Pieces]
+		lea   r11, [r12+8*8*64]
+		xor   r14d, r14d
+
+		.RankLoop_Bonus:
+		xor   r13d, r13d
+
+		.FileLoop_Bonus:
+		mov   eax, dword[PieceValue_EG+4*r15]
+		mov   edx, dword[PieceValue_MG+4*r15]
+		shl   edx, 16
+		add   eax, edx
+		shr   edx, 16
+		add   eax, dword[rsi]
+		add   rsi, 4
+
+		; white abcd
 		lea   edi, [8*r14+r13]
 		mov   dword[r12+8*rdi+0], eax
 		mov   dword[r12+8*rdi+4], edx
 
-	; set white efgh
-		xor   edi, 0000111b
+		; white efgh
+		xor   edi, 00000111b
 		mov   dword[r12+8*rdi+0], eax
 		mov   dword[r12+8*rdi+4], edx
 
+		; black efgh
+		xor   edi,  00111000b
 		neg   eax
 		shl   edx, 16
-
-	; set black efgh
-		xor   edi, 0111000b
 		mov   dword[r11+8*rdi+0], eax
 		mov   dword[r11+8*rdi+4], edx
 
-	; set black abcd
-		xor   edi, 0000111b
+		; black abcd
+		xor   edi, 00000111b
 		mov   dword[r11+8*rdi+0], eax
 		mov   dword[r11+8*rdi+4], edx
 
 		add   r13d, 1
 		cmp   r13d, 4
-		 jb   .FileLoop
+		jb   .FileLoop_Bonus
 		add   r14d, 1
 		cmp   r14d, 8
-		 jb   .RankLoop
+		jb   .RankLoop_Bonus
 		add   r15d, 1
 		cmp   r15d, King
 		jbe   .TypeLoop
 
-	      .Return:
+		.Return:
 		add   rsp, .localsize
 		pop   r15 r14 r13 r12 r11 rdi rsi rbx
 		ret
-
 
              calign   4
 .PieceValue_MG:
@@ -333,17 +365,7 @@ end virtual
 .PieceValue_EG:
  dd 0, 0, PawnValueEg, KnightValueEg, BishopValueEg, RookValueEg, QueenValueEg, 0
 
-
 .PSQR:
- dd 0,0,0,0
- dd (-11 shl 16) + (-3), (  7 shl 16) + ( -1), (  7 shl 16) + ( 7), (17 shl 16) + ( 2)
- dd (-16 shl 16) + (-2), ( -3 shl 16) + (  2), ( 23 shl 16) + ( 6), (23 shl 16) + (-1)
- dd (-14 shl 16) + ( 7), ( -7 shl 16) + ( -4), ( 20 shl 16) + (-8), (24 shl 16) + ( 2)
- dd ( -5 shl 16) + (13), ( -2 shl 16) + ( 10), ( -1 shl 16) + (-1), (12 shl 16) + (-8)
- dd (-11 shl 16) + (16), (-12 shl 16) + (  6), ( -2 shl 16) + ( 1), ( 4 shl 16) + (16)
- dd ( -2 shl 16) + ( 1), ( 20 shl 16) + (-12), (-10 shl 16) + ( 6), (-2 shl 16) + (25)
- dd 0,0,0,0
-
  dd (-169 shl 16) + (-105), (-96 shl 16) + (-74), (-80 shl 16) + (-46), (-79 shl 16) + (-18)
  dd ( -79 shl 16) + ( -70), (-39 shl 16) + (-56), (-24 shl 16) + (-15), ( -9 shl 16) + (  6)
  dd ( -64 shl 16) + ( -38), (-20 shl 16) + (-33), (  4 shl 16) + ( -5), ( 19 shl 16) + ( 27)
@@ -353,23 +375,23 @@ end virtual
  dd ( -67 shl 16) + ( -64), (-21 shl 16) + (-45), (  6 shl 16) + (-37), ( 37 shl 16) + ( 16)
  dd (-200 shl 16) + ( -98), (-80 shl 16) + (-89), (-53 shl 16) + (-53), (-32 shl 16) + (-16)
 
- dd (-49 shl 16) + (-58), (- 7 shl 16) + (-31), (-10 shl 16) + ( -37), (-34 shl 16) + (-19)
- dd (-24 shl 16) + (-34), (  9 shl 16) + ( -9), ( 15 shl 16) + ( -14), (  1 shl 16) + ( 4)
- dd ( -9 shl 16) + (-23), ( 22 shl 16) + (  0), ( -3 shl 16) + ( -3), ( 12 shl 16) + ( 16)
- dd (  4 shl 16) + (-26), (  9 shl 16) + ( -3), ( 18 shl 16) + ( -5), ( 40 shl 16) + ( 16)
- dd ( -8 shl 16) + (-26), ( 27 shl 16) + ( -4), ( 13 shl 16) + ( -7), ( 30 shl 16) + ( 14)
- dd (-17 shl 16) + (-24), ( 14 shl 16) + ( -2), ( -6 shl 16) + (  0), (  6 shl 16) + ( 13)
- dd (-19 shl 16) + (-34), (-13 shl 16) + (-10), (  7 shl 16) + ( -12), (-11 shl 16) + (  6)
- dd (-47 shl 16) + (-55), ( -7 shl 16) + (-32), (-17 shl 16) + ( -36), (-29 shl 16) + (-17)
+ dd (-44 shl 16) + (-63), ( -4 shl 16) + (-30), (-11 shl 16) + (-35), (-28 shl 16) + ( -8)
+ dd (-18 shl 16) + (-38), (  7 shl 16) + (-13), ( 14 shl 16) + (-14), (  3 shl 16) + (  0)
+ dd ( -8 shl 16) + (-18), ( 24 shl 16) + (  0), ( -3 shl 16) + ( -7), ( 15 shl 16) + ( 13)
+ dd (  1 shl 16) + (-26), (  8 shl 16) + ( -3), ( 26 shl 16) + (  1), ( 37 shl 16) + ( 16)
+ dd ( -7 shl 16) + (-24), ( 30 shl 16) + ( -6), ( 23 shl 16) + (-10), ( 28 shl 16) + ( 17)
+ dd (-17 shl 16) + (-26), (  4 shl 16) + (  2), ( -1 shl 16) + (  1), (  8 shl 16) + ( 16)
+ dd (-21 shl 16) + (-34), (-19 shl 16) + (-18), ( 10 shl 16) + ( -7), ( -6 shl 16) + (  9)
+ dd (-48 shl 16) + (-51), ( -3 shl 16) + (-40), (-12 shl 16) + (-39), (-25 shl 16) + (-20)
 
- dd (-24 shl 16) + ( 0), (-15 shl 16) + ( 3), ( -8 shl 16) + ( 0), ( 0 shl 16) + ( 3)
- dd (-18 shl 16) + (-7), ( -5 shl 16) + (-5), ( -1 shl 16) + (-5), ( 1 shl 16) + (-1)
- dd (-19 shl 16) + ( 6), (-10 shl 16) + (-7), (  1 shl 16) + ( 3), ( 0 shl 16) + ( 3)
- dd (-21 shl 16) + ( 0), ( -7 shl 16) + ( 4), ( -4 shl 16) + (-2), (-4 shl 16) + ( 1)
- dd (-21 shl 16) + (-7), (-12 shl 16) + ( 5), ( -1 shl 16) + (-5), ( 4 shl 16) + (-7)
- dd (-23 shl 16) + ( 3), (-10 shl 16) + ( 2), (  1 shl 16) + (-1), ( 6 shl 16) + ( 3)
- dd (-11 shl 16) + (-1), (  8 shl 16) + ( 7), (  9 shl 16) + (11), (12 shl 16) + (-1)
- dd (-25 shl 16) + ( 6), (-18 shl 16) + ( 4), (-11 shl 16) + ( 6), ( 2 shl 16) + ( 2)
+ dd (-24 shl 16) + ( -2), (-13 shl 16) + (-6), ( -7 shl 16) + ( -3), ( 2 shl 16) + (-2)
+ dd (-18 shl 16) + (-10), (-10 shl 16) + (-7), ( -5 shl 16) + (  1), ( 9 shl 16) + ( 0)
+ dd (-21 shl 16) + ( 10), ( -7 shl 16) + (-4), (  3 shl 16) + (  2), (-1 shl 16) + (-2)
+ dd (-13 shl 16) + ( -5), ( -5 shl 16) + ( 2), ( -4 shl 16) + ( -8), (-6 shl 16) + ( 8)
+ dd (-24 shl 16) + ( -8), (-12 shl 16) + ( 5), ( -1 shl 16) + (  4), ( 6 shl 16) + (-9)
+ dd (-24 shl 16) + (  3), ( -4 shl 16) + (-2), (  4 shl 16) + (-10), (10 shl 16) + ( 7)
+ dd ( -8 shl 16) + (  1), (  6 shl 16) + ( 2), ( 10 shl 16) + ( 17), (12 shl 16) + (-8)
+ dd (-22 shl 16) + ( 12), (-24 shl 16) + (-6), ( -6 shl 16) + ( 13), ( 4 shl 16) + ( 7)
 
  dd (  3 shl 16) + (-69), (-5 shl 16) + (-57), (-5 shl 16) + (-47), ( 4 shl 16) + (-26)
  dd ( -3 shl 16) + (-55), ( 5 shl 16) + (-31), ( 8 shl 16) + (-22), (12 shl 16) + ( -4)
@@ -388,3 +410,12 @@ end virtual
  dd (122 shl 16) + ( 87), (159 shl 16) + (164), ( 85 shl 16) + (174), ( 36 shl 16) + (189)
  dd ( 87 shl 16) + ( 40), (120 shl 16) + ( 99), ( 64 shl 16) + (128), ( 25 shl 16) + (141)
  dd ( 64 shl 16) + (  5), ( 87 shl 16) + ( 60), ( 49 shl 16) + ( 75), (  0 shl 16) + ( 75)
+
+ .PBONUS:
+ dd (  0 shl 16) + (  0), (  0 shl 16) + ( 0), (  0 shl 16) + (  0), (  0 shl 16) + (  0), (  0 shl 16) + (  0), (  0 shl 16) + (  0), (  0 shl 16) + (  0), (  0 shl 16) + (  0)
+ dd (  0 shl 16) + (-10), ( -5 shl 16) + (-3), ( 10 shl 16) + (  7), ( 13 shl 16) + ( -1), ( 21 shl 16) + (  7), ( 17 shl 16) + (  6), (  6 shl 16) + (  1), ( -3 shl 16) + (-20)
+ dd (-11 shl 16) + ( -6), (-10 shl 16) + (-6), ( 15 shl 16) + ( -1), ( 22 shl 16) + ( -1), ( 26 shl 16) + ( -1), ( 28 shl 16) + (  2), (  4 shl 16) + ( -2), (-24 shl 16) + ( -5)
+ dd ( -9 shl 16) + (  4), (-18 shl 16) + (-5), (  8 shl 16) + ( -4), ( 22 shl 16) + ( -5), ( 33 shl 16) + ( -6), ( 25 shl 16) + (-13), ( -4 shl 16) + ( -3), (-16 shl 16) + ( -7)
+ dd (  6 shl 16) + ( 18), ( -3 shl 16) + ( 2), (-10 shl 16) + (  2), (  1 shl 16) + ( -9), ( 12 shl 16) + (-13), (  6 shl 16) + ( -8), (-12 shl 16) + ( 11), (  1 shl 16) + (  9)
+ dd ( -6 shl 16) + ( 25), ( -8 shl 16) + (17), (  5 shl 16) + ( 19), ( 11 shl 16) + ( 29), (-14 shl 16) + ( 29), (  0 shl 16) + (  8), (-12 shl 16) + (  4), (-14 shl 16) + ( 12)
+ dd (-10 shl 16) + ( -1), (  6 shl 16) + (-6), ( -5 shl 16) + ( 18), (-11 shl 16) + ( 22), ( -2 shl 16) + ( 22), (-14 shl 16) + ( 17), ( 12 shl 16) + (  2), ( -1 shl 16) + (  9)

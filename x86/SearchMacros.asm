@@ -281,7 +281,6 @@ end if
 		mov   ecx, dword[rcx+RootMove.pv+4*0]
   end if
 		mov   dword[.ttMove], ecx
-		;mov   dword[.ttValue],	edi
 
 		lea   r8d, [rdi+VALUE_MATE_IN_MAX_PLY]
 	       test   edx, edx
@@ -441,7 +440,7 @@ end if
 		mov   byte[.improving],	al   ; should be 0 or 1
 
 		; Step 8. Futility pruning:	child node (skipped when in check)
-  if (RootNode = 0 & USE_MATEFINDER = 0) | (PvNode = 0 & USE_MATEFINDER	= 1)
+  if (PvNode = 0 & USE_MATEFINDER = 0) | (PvNode = 0 & USE_MATEFINDER	= 1)
 		mov   edx, dword[.depth]
 		mov   ecx, dword[rbp+Pos.sideToMove]
 		cmp   edx, 7*ONE_PLY
@@ -898,7 +897,6 @@ end if
 		mov   dword[.reductionOffset], eax
 		xor   eax, eax
 		mov   byte[.skipQuiets], al
-		mov   dword[.ttCapture], eax
 
 
   if RootNode = 1
@@ -939,6 +937,22 @@ end if
 		and   al, byte[.ttHit]
 		mov   dword[.pvExact], eax
   end if
+
+	mov   eax, dword[.ttMove]
+	test  eax, eax
+	setnz cl
+	; ecx = ttMove
+	mov  edx, eax
+	and  edx, 63
+	shr  eax, 14
+	movzx  edx, byte[rbp+Pos.board+rdx]
+	or  dl, byte[_CaptureOrPromotion_or+rax]
+	and  dl, byte[_CaptureOrPromotion_and+rax]
+	; edx = pos.capture_or_promotion(ttMove)
+	test  edx, edx
+	setnz  al
+	and  eax, ecx
+	mov  dword[.ttCapture], eax
 
   ; Step 12. Loop through moves
 	 calign	  8
@@ -1046,6 +1060,17 @@ end if
 		cmp   eax, edi
 		setl   cl
 		mov   dword[.extension], ecx
+		test  ecx, ecx
+		jnz  @f
+		movzx   r9d, byte[.cutNode]
+		mov  r8d, dword[.beta]
+		cmp  edi, r8d
+		setg  cl
+		and  ecx, r9d
+		jz  @f
+		mov  eax, r8d
+		jmp .Return
+@@:
     ; The call to search_NonPV with the	same value of ss messed	up our
     ; move picker data.	So we fix it.
 		mov   qword[rbx+State.stage], r12
@@ -1105,13 +1130,9 @@ end if
 	       test   ecx, ecx
 		 jz   .13done
 		mov   al, byte[.captureOrPromotion]
-	      movzx   ecx, word[rbx+State.npMaterial+2*1]
-		add   esi, ecx
 		 or   al, byte[rbx+State.givesCheck]
 		jnz   .13else
 		lea   ecx, [8*r8+Pawn]
-		cmp   esi, 5000
-		jae   @f
 		cmp   r14d, ecx
 		jne   @f
 		imul   r8d, 56
@@ -1139,6 +1160,8 @@ end if
 		mov   r9d, 3
 		cmp   edx, dword[rbx-1*sizeof.State+State.statScore]
 		cmovl  r10d, r9d
+		cmp   dword[rbx-1*sizeof.State+State.moveCount], 1
+		cmove r10d, r9d
 		cmp   edi, r10d
 		jg  @f
   if CounterMovePruneThreshold <> 0     ; code assumes
@@ -1209,14 +1232,6 @@ end if
 		add   rax, qword[rbp+Pos.counterMoveHistory]
 		mov   dword[rbx+State.currentMove],	ecx
 		mov   qword[rbx+State.counterMoves], rax
-		xor   eax, eax
-		xor   edx, edx
-		cmp   byte[.captureOrPromotion], 0
-	      setne   al
-		cmp   ecx, dword[.ttMove]
-	       sete   dl
-		and   eax, edx
-		 or   dword[.ttCapture], eax
 
     ; Step 15. Make the move
 	       call   Move_Do__Search
@@ -1497,7 +1512,6 @@ end if
 .MovePickDone:
     ; Step 20. Check for mate and stalemate
 		mov   eax, dword[rbx-1*sizeof.State+State.currentMove]
-		lea   esi, [rax-1]
 		and   eax, 63
 	      movzx   ecx, byte[rbp+Pos.board+rax]
 		shl   ecx, 6
@@ -1506,14 +1520,14 @@ end if
 		mov   r13d, dword[.depth]
 		mov   edi, dword[.bestValue]
 		stat_bonus  r10d, rax, r13
-		add   r13, 1
+		add   r13d, 1
 		stat_bonus  r14d, rax, r13
-		sub   r13, 1
+		sub   r13d, 1
     ; r15d = offset of [piece_on(prevSq),prevSq]
     ; r12d = move
     ; r13d = depth
     ; r10d = bonus
-    ; r14d = excludedMove
+    ; r14d = statbonus (depth + 1)
 		mov   edi, dword[.bestValue]
 		cmp   dword[.moveCount], 0
 		 je   .20Mate
@@ -1539,20 +1553,24 @@ end if
  @1:
 		UpdateCaptureStats  r12d, .capturesSearched, dword[.captureCount], r11d, r14d
 
- @2:
-		mov   r10d, r14d
-    ; r10d = penalty
 		cmp   dword[rbx-1*sizeof.State+State.moveCount], 1
-		jne   .20TTStore
+		je  @2f
+
+		mov  eax, dword[rbx-1*sizeof.State+State.killers]
+		cmp  eax, dword[rbx-1*sizeof.State+State.currentMove]
+		jne  .20TTStore
+
+@2:
 		cmp   byte[rbx+State.capturedPiece], 0
 		jne   .20TTStore
-		mov  r11d, r10d
+		mov  r11d, r14d
 		neg  r11d ; negative bonus
-		cmp   r10d, BONUS_MAX
+		cmp   r14d, BONUS_MAX
 		jae   .20TTStore
-		abs_bonus r11d, r10d
-		UpdateCmStats   (rbx-1*sizeof.State), r15, r11d, r10d, r8
+		abs_bonus r11d, r14d
+		UpdateCmStats   (rbx-1*sizeof.State), r15, r11d, r14d, r8
 		jmp   .20TTStore
+
 .20Mate:
 		mov   r14d, dword[.excludedMove]
 		mov   rax, qword[rbx+State.checkersBB]
@@ -1568,9 +1586,8 @@ end if
 	if PvNode = 1
 		jmp @f
 	else
-		lea   edx, [r13-3*ONE_PLY]
-		or   edx, esi
-		js   .20TTStore
+		cmp  r13d, 3*ONE_PLY
+		jb  .20TTStore
 	end if
 
 	@@:
@@ -1618,7 +1635,7 @@ Display	2, "Search returning %i0%n"
 		pop   r15 r14 r13 r12 rdi rsi rbx
 		ret
 .ValueFromTT:
-	      movzx   r8d, byte[rbx+State.ply]
+		movzx   r8d, byte[rbx+State.ply]
 		mov   r9d, edi
 		sar   r9d, 31
 		xor   r8d, r9d
@@ -1632,76 +1649,90 @@ Display	2, "Search returning %i0%n"
 		mov   dword[.moveCount], eax
 		jmp   .MovePickLoop
 
-  if RootNode = 0
+	if RootNode = 0
 
-             calign  8
-.AbortSearch_PlyBigger:
+		calign  8
+		.AbortSearch_PlyBigger:
 		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
 		mov  rcx, qword[rbx + State.checkersBB]
-               test  rcx, rcx
-                 jz  .Return
-	       call  Evaluate
+		test  rcx, rcx
+		jz  .Return
+		call  Evaluate
 
-             calign   8
-.AbortSearch_PlySmaller:
+		calign   8
+		.AbortSearch_PlySmaller:
 		value_draw  rax, dword[.depth], qword[rbp-Thread.rootPos+Thread.nodes]
-                jmp  .Return
-  end if
+		jmp  .Return
+	end if
 
-  if PvNode = 0
-	 calign   8
-.ReturnTTValue:
-    ; edi = ttValue
+	if PvNode = 0
+		calign   8
+		.ReturnTTValue:
+		; edi = ttValue
 		mov   r12d,	ecx
 		mov   r13d, dword[.depth]
 		stat_bonus  r10d, rax, r13
-    ; r12d = move
-    ; r13d = depth
-    ; r10d = bonus
+		; r12d = move
+		; r13d = depth
+		; r10d = bonus
 		mov   eax, r12d
 		mov   edx, r12d
 		and   edx, 63
 		shr   eax, 14
-	      movzx   edx, byte[rbp+Pos.board+rdx]
-		 or   dl, byte[_CaptureOrPromotion_or+rax]
+		movzx   edx, byte[rbp+Pos.board+rdx]
+		or   dl, byte[_CaptureOrPromotion_or+rax]
 		and   dl, byte[_CaptureOrPromotion_and+rax]
-    ; dl = capture or promotion
+		; dl = capture or promotion
 		mov   eax, edi
-	       test   ecx, ecx
-		 jz   .Return
-    ; ttMove is	quiet; update move sorting heuristics on TT hit
+		test   ecx, ecx
+		jz   .Return
+
+		; ttMove is quiet; update move sorting heuristics on TT hit
 		cmp   edi, dword[.beta]
-		 jl   .ReturnTTValue_Penalty
+		jl   .ReturnTTValue_Penalty
+
 		mov   eax, dword[rbx-1*sizeof.State+State.currentMove]
 		and   eax, 63
-	      movzx   ecx, byte[rbp+Pos.board+rax]
+		movzx   ecx, byte[rbp+Pos.board+rax]
 		shl   ecx, 6
-		lea   r15d,	[rax+rcx]
-    ; r15d = offset of [piece_on(prevSq),prevSq]
-	       test   dl, dl
+		lea   r15d, [rax+rcx]
+		; r15d = offset of [piece_on(prevSq),prevSq]
+		test   dl, dl
 		jnz   .ReturnTTValue_UpdateCaptureStats
-	UpdateStats   r12d,	0, 0, r11d, r10d, r15
-;		jmp   .ReturnTTValue_UpdateStatsDone
+
+		UpdateStats   r12d, 0, 0, r11d, r10d, r15
+
 .ReturnTTValue_UpdateCaptureStats:
-;UpdateCaptureStats   r12d, 0, 0, r11d,	r10d
 .ReturnTTValue_UpdateStatsDone:
 		add   r13, 1
 		stat_bonus  r10d, rax, r13
 		sub   r13, 1
     ; r10d = penalty
+
 		cmp   dword[rbx-1*sizeof.State+State.moveCount], 1
 		mov   eax, edi
-		jne   .Return
+		je  @1f
+
+		mov  ecx, dword[rbx-1*sizeof.State+State.killers]
+		cmp  ecx, dword[rbx-1*sizeof.State+State.currentMove]
+		jne  .Return
+
+	@1:
 		cmp   byte[rbx+State.capturedPiece], 0
+		mov   eax, edi
 		jne   .Return
+
 		mov   r11d, r10d
 		neg   r11d ; negative bonus
 		cmp   r10d, BONUS_MAX
+		mov   eax, edi
 		jae   .Return
+
 		abs_bonus r11d, r10d
 		UpdateCmStats (rbx-1*sizeof.State), r15, r11d, r10d, r8
 		mov   eax, edi
 		jmp   .Return
+
 .ReturnTTValue_Penalty:
 		and   ecx, 64*64-1
 		mov   r8d, dword[rbp+Pos.sideToMove]
@@ -1711,10 +1742,12 @@ Display	2, "Search returning %i0%n"
 		; r8 = offset in history table
 		test   dl, dl
 		jnz   .Return
+
 		mov   r11d, r10d
 		neg   r11d
 		cmp   r10d, BONUS_MAX
 		jae   .Return
+
 		abs_bonus r11d, r10d
 		history_update r8, r11d, r10d
 		mov   r9d, r12d
@@ -1731,6 +1764,7 @@ Display	2, "Search returning %i0%n"
 		mov  eax, edi
 		jmp  .Return
   end if
+
 	 calign   8
 .20ValueToTT:
 	      movzx   edx, byte[rbx+State.ply]
@@ -1740,6 +1774,7 @@ Display	2, "Search returning %i0%n"
 		sub   edx, eax
 		add   edx, edi
 		jmp   .20ValueToTTRet
+
   if RootNode = 0
 	 calign   8
 .CheckDraw_Cold:

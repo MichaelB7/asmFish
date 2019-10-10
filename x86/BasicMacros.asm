@@ -452,14 +452,14 @@ end macro
 
 ; A nice macro for dumping register contents in hex.
 ; The C++ equivalent is: printf("%016llX\n", var_name)
- macro dump reg
-		PushAll
-		mov  rcx, reg
-		shl rcx, 32
-		shr rcx, 32
-		lea   rdi, [Output]
-		call  PrintHex
-		call  Os_WriteOut_Output
-		Display 4, '%n'
-		PopAll
- end macro
+macro dump reg
+PushAll
+mov  rcx, reg
+shl rcx, 32
+shr rcx, 32
+lea   rdi, [Output]
+call  PrintHex
+call  Os_WriteOut_Output
+Display 4, '%n'
+PopAll
+end macro

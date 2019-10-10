@@ -1,23 +1,23 @@
-BishopPawns         = (  3 shl 16) + (  8)
-CloseEnemies        = (  7 shl 16) + (  0)
-Hanging             = ( 62 shl 16) + ( 34)
-KingProtector_Pt    = ( -6 shl 16) + ( -7)
-KnightOnQueen       = ( 20 shl 16) + ( 12)
-LongDiagonalBishop  = ( 44 shl 16) + (  0)
-MinorBehindPawn     = ( 16 shl 16) + (  0)
-PawnlessFlank       = ( 18 shl 16) + ( 94)
-RestrictedPiece     = (  7 shl 16) + (  6)
-RookOnPawn          = ( 10 shl 16) + ( 28)
+BishopPawns         = (  3 shl 16) + (  7)
+CloseEnemies        = (  8 shl 16) + (  0)
+Hanging             = ( 69 shl 16) + ( 36)
+KingProtector_Pt    = ( -7 shl 16) + ( -8)
+KnightOnQueen       = ( 16 shl 16) + ( 12)
+LongDiagonalBishop  = ( 45 shl 16) + (  0)
+MinorBehindPawn     = ( 18 shl 16) + (  3)
+PawnlessFlank       = ( 17 shl 16) + ( 95)
+RestrictedPiece     = (  7 shl 16) + (  7)
+RookOnPawn          = ( 10 shl 16) + ( 32)
 Overload            = ( 12 shl 16) + (  6)
-SliderOnQueen       = ( 49 shl 16) + ( 21)
-ThreatByKing        = ( 21 shl 16) + ( 84)
-ThreatByPawnPush    = ( 48 shl 16) + ( 42)
-ThreatByRank        = ( 14 shl 16) + (  3)
-ThreatBySafePawn    = (169 shl 16) + ( 99)
+SliderOnQueen       = ( 59 shl 16) + ( 18)
+ThreatByKing        = ( 24 shl 16) + ( 89)
+ThreatByPawnPush    = ( 48 shl 16) + ( 39)
+ThreatByRank        = ( 13 shl 16) + (  0)
+ThreatBySafePawn    = (173 shl 16) + ( 94)
 TrappedBishopA1H1   = ( 50 shl 16) + ( 50)
-TrappedRook         = ( 98 shl 16) + (  5)
-WeakQueen           = ( 51 shl 16) + ( 10)
-WeakUnopposedPawn   = ( 14 shl 16) + ( 20)
+TrappedRook         = (-47 shl 16) + ( -4)
+WeakQueen           = ( 49 shl 16) + ( 15)
+WeakUnopposedPawn   = ( 12 shl 16) + ( 23)
 
 LazyThreshold = 1500
 
@@ -36,12 +36,16 @@ macro EvalInit Us
 	Down	= DELTA_N
 	West	= DELTA_W
 	East	= DELTA_E
+	Left = DELTA_SW
+	Right = DELTA_SE
    else
 	Them	= White
 	Up		= DELTA_N
 	Down	= DELTA_S
 	West	= DELTA_W
 	East	= DELTA_E
+	Left = DELTA_NE
+	Right = DELTA_NW
    end if
 
 
@@ -56,9 +60,6 @@ macro EvalInit Us
 		or     qword[.ei.attackedBy+8*(8*Us+0)],	r10
 		xor    r8, r8
 		xor    edx, edx
-
-		cmp   ecx, RookValueMg + KnightValueMg
-		jb    @1f
 
 		; if (relative_rank(Us, pos.square<KING>) == RANK_1)
 		if Them = White
@@ -103,6 +104,15 @@ macro EvalInit Us
 		mov   dword[.ei.kingAttackersWeight+4*Us], eax
 		mov   dword[.ei.kingAdjacentZoneAttacksCount+4*Us], eax
 
+		; & ~double_pawn_attacks_bb<Us>(pos.pieces(Us, PAWN)
+		mov   r11, qword[rbp+Pos.typeBB+8*Them]
+		and   r11, qword[rbp+Pos.typeBB+8*Pawn]
+		mov  r9, r11
+		ShiftBB  Right, r11, rcx
+		ShiftBB  Left, r9, rcx
+		and  r11, r9
+		_andn r8, r11, r8
+
 	@1:
 		mov   qword[.ei.kingRing+8*Them], r8
 		mov   dword[.ei.kingAttackersCount+4*Us], edx
@@ -145,6 +155,8 @@ macro EvalPieces Us, Pt
 	end macro
 	Them			= Black
 	Down 			= DELTA_S
+	Left = DELTA_SW
+	Right = DELTA_SE
 	OutpostRanks	  = 0x0000FFFFFF000000
   else
 	;addsub		  equ sub
@@ -157,6 +169,8 @@ macro EvalPieces Us, Pt
 	end macro
 	Them			= White
 	Down 			= DELTA_N
+	Left = DELTA_NE
+	Right = DELTA_NW
 	OutpostRanks	  = 0x000000FFFFFF0000
   end if
 
@@ -241,14 +255,15 @@ NoPinned:
 
 		test   r9, qword[.ei.kingRing+8*Them]
 		jz   NoKingRing	; 74.44%
+
 		add   dword[.ei.kingAttackersCount+4*Us], 1
 		add   dword[.ei.kingAttackersWeight+4*Us], KingAttackWeight
 		mov   rax, qword[.ei.attackedBy+8*(8*Them+King)]
 		and   rax, r9
 		_popcnt   rax, rax, rcx
 		add   dword[.ei.kingAdjacentZoneAttacksCount+4*Us], eax
-NoKingRing:
 
+NoKingRing:
 		mov   rax, qword[.ei.mobilityArea+8*Us]
 		and   rax, r9
 
@@ -398,10 +413,8 @@ NoOpenFileBonus:
 		and  eax, 3 shl (2*Us)
 		setz  al
 		add  eax, 1
-		imul  r10d, 22*65536
-		sub  r10d, TrappedRook
-		imul  r10d, eax
-             addsub  esi, r10d
+		imul  eax, TrappedRook
+		addsub  esi, eax
 NoTrappedByKing:
 
   else if Pt = Queen
@@ -422,7 +435,7 @@ NoTrappedByKing:
 		_tzcnt   rcx, rax
 QueenPinLoop:
 		mov   rcx, qword[BetweenBB+r14+8*rcx]
-		_blsr   rax, rax,	r9
+		_blsr   rax, rax, r9
 		and   rcx, r13
 		_blsr   r8, rcx, r9
 		neg   r8
@@ -530,11 +543,6 @@ SetTropism:
 
 	tropism = r10
 
-		mov   edi, dword[.ei.kingAttackersCount+4*Them]
-		movzx ecx, byte[rbp+Pos.pieceEnd+(8*Them+Queen)]
-		and   ecx, 15
-		add   ecx, edi
-
 		mov   r8, qword[.ei.attackedBy2+8*Us]
 		_andn r8, r8, AttackedByThem
 		mov   r9, AttackedByUs
@@ -545,9 +553,8 @@ SetTropism:
 
 		mov   r9, qword[.ei.kingRing+8*Us]
 		and   r9, r8
-		cmp   ecx, 2
 
-		jb   AllDone
+		mov   edi, dword[.ei.kingAttackersCount+4*Them]
 		imul  edi, dword[.ei.kingAttackersWeight+4*Them]
 		imul  eax, dword[.ei.kingAdjacentZoneAttacksCount+4*Them], 69
 		add   edi, eax
@@ -1053,7 +1060,14 @@ ThreatRookLoop:
 		jnz   ThreatRookLoop
 ThreatRookDone:
 
-		_andn   rax, AttackedByThem, r9
+		mov    r8, PiecesPawn
+		_andn  r8, r8, PiecesThem ; nonPawnEnemies
+		and  r8, qword[.ei.attackedBy2+8*Us]
+		mov  rax, AttackedByThem
+		not  rax
+		or  rax, r8
+		and  rax, r9
+
 		_popcnt   rax, rax, rcx
 		imul   eax, Hanging
 		addsub   esi, eax
@@ -1113,6 +1127,8 @@ WeakDone:
 		and   rax, rdx
 
 		mov   rdx, rax
+
+; pawn_attacks_bb<Us>(b)
 		ShiftBB   Left, rax, rcx
 		ShiftBB   Right,	rdx, rcx
 		or   rax, rdx
@@ -1156,21 +1172,10 @@ WeakDone:
 
 ; // Bonus for overload (non-pawn enemies attacked once or more and defended exactly once)
 ; weak = pos.pieces(Them) & ~stronglyProtected & attackedBy[Us][ALL_PIECES];
-		mov    r8, PiecesPawn
-		_andn  r8, r8, PiecesThem ; r8 = nonPawnEnemies
-		and  r8, notStronglyProtected
-		and    r8, AttackedByUs
-		and    r8, AttackedByThem
-		_popcnt  r8, r8, rdx
-		imul   r8d, Overload
-		addsub  esi, r8d
 
 ; // Bonus for restricting their piece moves
-		mov  r9, qword[.ei.attackedBy+8*(8*Them+Pawn)]
-		mov  rax, qword[.ei.attackedBy2+8*Them]
-		_andn  r10, r9, AttackedByThem
-		_andn  r10, rax, r10
-		and    r10, AttackedByUs
+		and   r10, AttackedByThem
+		and   r10, AttackedByUs
 		_popcnt  r10, r10, rdx
 		imul  r10d, RestrictedPiece
 		addsub  esi, r10d
@@ -1744,7 +1749,7 @@ end virtual
 		mov   rcx, FileEBB or FileFBB or FileGBB or FileHBB
 		and   r8, r11
 		and   rcx, r11
-		mov   eax, 16
+		mov   eax, 18
 		neg   r8
 		sbb   r8, r8
 		and   r8, rcx
@@ -1755,14 +1760,17 @@ end virtual
 		mov  r14d, edx ; save for later
 		add  edx, eax
 		lea   r8d, [r8+4*rax]
-		lea   r8d, [r8+8*rdx-118]
+		sub   r8d, eax
+		lea   r8d, [r8+8*rdx-121]
+		add   r8d, r14d
+
 
 		movzx   r9d, word[rbx+State.npMaterial+2*0]
 		movzx   ecx, word[rbx+State.npMaterial+2*1]
 		lea     r9d, [r9+rcx]
 		cmp     r9d, 1
 		sbb     r9d, r9d ; If the CF is 0, then r9d = 0.
-		and     r9d, 48
+		and     r9d, 49
 		lea     r8d, [r8+r9]
 
 		movsx r9d, si
@@ -1788,10 +1796,9 @@ end virtual
 		and   ecx, 7
 		sub   eax, ecx
 		abs  rax
+		sub  eax, r11d ; eax = outflanking
 
-		sub  eax, r11d
-		lea  eax, [rax+2*rax]
-		shl  eax, 2
+		lea  eax, [rax+8*rax]
 		add  eax, r8d
 
 	; eax = initiative

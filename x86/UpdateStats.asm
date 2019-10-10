@@ -181,6 +181,3 @@ NextCapture:
 BonusTooBig:
 Return:
 end macro
-
-
-
