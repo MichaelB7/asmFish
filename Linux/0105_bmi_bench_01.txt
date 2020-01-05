@@ -1,0 +1,45 @@
+asmFishL_2020-01-05_bmi1
+*** bench hash 1024 threads 64 depth 26 realtime 0 ***
+info string hash set to 1024 MB no large pages
+info string node 0 has threads 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
+1:      nodes:  664180750       100359 knps
+2:      nodes:  1707236232      113975 knps
+3:      nodes:  39166235        142422 knps
+4:      nodes:  630280337       121605 knps
+5:      nodes:  489892347       111011 knps
+6:      nodes:  442570088       109195 knps
+7:      nodes:  233538151       113038 knps
+8:      nodes:  1704425987      116805 knps
+9:      nodes:  1256491430      110840 knps
+10:     nodes:  261754196       122257 knps
+11:     nodes:  597175991       111164 knps
+12:     nodes:  550128895       107300 knps
+13:     nodes:  105644626       120736 knps
+14:     nodes:  1844472078      110540 knps
+15:     nodes:  126203992       120423 knps
+16:     nodes:  116230367       140544 knps
+17:     nodes:  9277708         122075 knps
+18:     nodes:  60903282        130413 knps
+19:     nodes:  63302522        145523 knps
+20:     nodes:  222115205       157194 knps
+21:     nodes:  25400428        125744 knps
+22:     nodes:  51457542        118293 knps
+23:     nodes:  195138434       137615 knps
+24:     nodes:  42424424        134680 knps
+25:     nodes:  241929336       170013 knps
+26:     nodes:  6972114         136708 knps
+27:     nodes:  23679140        131550 knps
+28:     nodes:  157769862       140115 knps
+29:     nodes:  55393333        124200 knps
+30:     nodes:  34389775        137559 knps
+31:     nodes:  5597377         103655 knps
+32:     nodes:  7890991         102480 knps
+33:     nodes:  4351200         88800 knps
+34:     nodes:  20620507        133899 knps
+35:     nodes:  14462618        119525 knps
+36:     nodes:  3095729         99862 knps
+37:     nodes:  5122878         131355 knps
+===========================
+Total time (ms) : 104353
+Nodes searched  : 12020686107
+Nodes/second    : 115192530

@@ -1,0 +1,43 @@
+asmFishL_2020-01-05_popcnt
+*** bench hash 16 threads 1 depth 13 realtime 0 ***
+1:      nodes:  277018          2289 knps
+2:      nodes:  482402          2499 knps
+3:      nodes:  114991          3382 knps
+4:      nodes:  196713          2554 knps
+5:      nodes:  63877           2456 knps
+6:      nodes:  263892          2274 knps
+7:      nodes:  346813          2375 knps
+8:      nodes:  505265          2564 knps
+9:      nodes:  241220          2364 knps
+10:     nodes:  151622          2660 knps
+11:     nodes:  296773          2393 knps
+12:     nodes:  405241          2369 knps
+13:     nodes:  175110          2575 knps
+14:     nodes:  170049          2464 knps
+15:     nodes:  150035          2727 knps
+16:     nodes:  69170           3144 knps
+17:     nodes:  83857           3494 knps
+18:     nodes:  33542           3726 knps
+19:     nodes:  58975           3931 knps
+20:     nodes:  524256          3691 knps
+21:     nodes:  60619           4329 knps
+22:     nodes:  55590           5559 knps
+23:     nodes:  106803          5085 knps
+24:     nodes:  64937           3607 knps
+25:     nodes:  9369            3123 knps
+26:     nodes:  70579           3528 knps
+27:     nodes:  404427          3184 knps
+28:     nodes:  203255          2945 knps
+29:     nodes:  82481           3054 knps
+30:     nodes:  20892           4178 knps
+31:     nodes:  64482           4960 knps
+32:     nodes:  102117          4254 knps
+33:     nodes:  67529           4823 knps
+34:     nodes:  83587           3799 knps
+35:     nodes:  98418           4100 knps
+36:     nodes:  110065          5503 knps
+37:     nodes:  254018          3479 knps
+===========================
+Total time (ms) : 2272
+Nodes searched  : 6469989
+Nodes/second    : 2847706
